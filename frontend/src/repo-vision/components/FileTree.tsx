@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import  { useState } from "react";
 import { Badge } from "./Badge";
 import type { FileTreeNode, File } from "../types";
 

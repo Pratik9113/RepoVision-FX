@@ -1,4 +1,4 @@
-import React, { useState, useEffect, type FC } from "react";
+import { useState, useEffect, type FC } from "react";
 import hljs from "highlight.js";
 import { Badge } from "./Badge";
 
