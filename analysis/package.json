@@ -1,0 +1,35 @@
+{
+  "name": "analysis",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start" : "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@octokit/auth-token": "^6.0.0",
+    "@octokit/rest": "^22.0.1",
+    "acorn": "^8.16.0",
+    "acorn-walk": "^8.3.5",
+    "adm-zip": "^0.5.16",
+    "axios": "^1.13.5",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "fast-glob": "^3.3.3",
+    "fs-extra": "^11.3.3",
+    "groq-sdk": "^0.37.0",
+    "marked": "^17.0.3",
+    "node-fetch": "^3.3.2",
+    "simple-git": "^3.32.2",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
