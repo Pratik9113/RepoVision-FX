@@ -12,6 +12,9 @@ import AdmZip from "adm-zip";
 import ExplorerRouter from "./route/explorerRouter.js";
 import AnalyzeRouter from "./route/analyzeRoute.js";
 import FileContentRouter from "./route/fileContentRoute.js";
+import IncidentFixRouter from "./route/incidentFixRoute.js";
+import { IncidentParser } from "./autonomous_agent/IncidentParser.js";
+
 
 dotenv.config();
 
@@ -149,6 +152,26 @@ app.use("/explore", ExplorerRouter);
 
 // File content endpoint
 app.use("/file", FileContentRouter);
+
+// Incident fix endpoint
+app.use("/api/fix", IncidentFixRouter);
+
+// Autonomous Incident-To-Fix Endpoint
+app.post("/api/agent/incident", async (req, res) => {
+  try {
+    const { ticketText } = req.body;
+    if (!ticketText) return res.status(400).json({ error: "Missing ticketText" });
+
+    const parser = new IncidentParser();
+    const result = await parser.processIncidentPipeline(ticketText);
+
+    res.json(result);
+  } catch (err) {
+    console.error("/api/agent/incident failed", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // ---------------- Health check ----------------
 app.get('/health', (req, res) => {

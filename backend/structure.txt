@@ -1,0 +1,34 @@
+incident-fix-agent/
+│
+├── app/
+│   ├── main.py
+│   ├── orchestrator.py
+│   │
+│   ├── agents/
+│   │   ├── incident_agent.py
+│   │   ├── rootcause_agent.py
+│   │   ├── patch_agent.py
+│   │   ├── test_agent.py
+│   │   └── report_agent.py
+│   │
+│   ├── services/
+│   │   ├── search_service.py
+│   │   ├── graph_service.py
+│   │   ├── sandbox_service.py
+│   │   └── validation_service.py
+│   │
+│   └── utils/
+│       ├── file_utils.py
+│       └── llm_client.py
+│
+├── test_repo/                 ← Dummy buggy project
+│   ├── db_service.py
+│   ├── user_repo.py
+│   ├── main_app.py
+│   └── test_user.py
+│
+├── sandbox/
+│   └── Dockerfile
+│
+├── requirements.txt
+└── README.md
