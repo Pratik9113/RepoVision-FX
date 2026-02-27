@@ -10,7 +10,7 @@ Coordinates entire incident resolution pipeline.
 
 from services.repository_manager import clone_or_update_repo, get_repo_files
 from agents.incident_agent import extract_signals
-from services.search_service import search_files
+from services.search_service import search_files, search_by_function_name
 import json
 from groq import Groq
 import os
@@ -82,69 +82,71 @@ def handle_incident(repo_url: str, description: str):
     print(f"  • Line Numbers: {signals.get('line_numbers', [])}")
     print(f"  • Keywords: {signals.get('keywords', [])[:10]}")
 
-
-
     
-    # STEP 4: Search file CONTENTS (not just filenames)
+    # STEP 4: Search file CONTENTS
     print(f"\n▶️ STEP 4: Searching File Contents in Sandbox")
     candidate_files = search_files(signals, sandbox_path)
-    print(candidate_files)
     print(f"🎯 Found {len(candidate_files)} files with matching content")
 
+    # STEP 5: Search for specific functions (ONLY if we have function names)
+    function_matches = []
+    if signals.get("functions"):
+        print(f"\n▶️ STEP 5: Searching for Function Definitions")
+        function_matches = search_by_function_name(sandbox_path, signals.get("functions", []))
+        print(f"🔧 Found {len(function_matches)} function definitions")
+    else:
+        print(f"\n▶️ STEP 5: No function names in query - skipping")
+    
+    # Analyze function matches with Groq
+    if function_matches and groq_client:
+        print(f"🤖 Analyzing function definitions with Groq...")
+        function_analysis = analyze_functions_with_groq(
+            function_matches,
+            signals,
+            description
+        )
+        print(f"✅ Function analysis: {function_analysis.get('summary', 'Analysis complete')}")
+    else:
+        function_analysis = {"functions": function_matches, "summary": "No analysis available"}
+    
+
+
+
+
+
+
+    # STEP 6: Prepare context for LLM and perform root cause analysis
+    print(f"\n▶️ STEP 6: Preparing Analysis Context & Analyzing Root Cause")
+    llm_context = prepare_llm_context(candidate_files, function_matches, description)
+    
+    # Use Groq for root cause analysis
+    if groq_client:
+        print(f"🧠 Running Groq root cause analysis...")
+        root_cause_analysis = analyze_root_cause_with_groq(
+            candidate_files,
+            function_matches,
+            signals,
+            description,
+            llm_context
+        )
+        llm_context["root_cause_analysis"] = root_cause_analysis
+    else:
+        print("⚠️ Groq API not configured, skipping LLM analysis")
+        llm_context["root_cause_analysis"] = {"error": "Groq API key not available"}
 
     
-    # # STEP 5: Search for specific functions
-    # print(f"\n▶️ STEP 5: Searching for Function Definitions")
-    # function_matches = search_by_function_name(sandbox_path, signals.get("functions", []))
-    # print(f"🔧 Found {len(function_matches)} function definitions")
-    
-    # # Analyze function matches with Groq
-    # if function_matches and groq_client:
-    #     print(f"🤖 Analyzing function definitions with Groq...")
-    #     function_analysis = analyze_functions_with_groq(
-    #         function_matches,
-    #         signals,
-    #         description
-    #     )
-    #     print(f"✅ Function analysis: {function_analysis.get('summary', 'Analysis complete')}")
-    # else:
-    #     function_analysis = {"functions": function_matches, "summary": "No analysis available"}
-    
-    # # STEP 6: Prepare context for LLM and perform root cause analysis
-    # print(f"\n▶️ STEP 6: Preparing Analysis Context & Analyzing Root Cause")
-    # llm_context = prepare_llm_context(candidate_files, function_matches, description)
-    
-    # # Use Groq for root cause analysis
-    # if groq_client:
-    #     print(f"🧠 Running Groq root cause analysis...")
-    #     root_cause_analysis = analyze_root_cause_with_groq(
-    #         candidate_files,
-    #         function_matches,
-    #         signals,
-    #         description,
-    #         llm_context
-    #     )
-    #     llm_context["root_cause_analysis"] = root_cause_analysis
-    # else:
-    #     print("⚠️ Groq API not configured, skipping LLM analysis")
-    #     llm_context["root_cause_analysis"] = {"error": "Groq API key not available"}
-
-    
-    # return {
-    #     "status": "success",
-    #     "repo_status": repo_result["status"],
-    #     "sandbox_path": sandbox_path,
-    #     "signals": signals,
-    #     "candidate_files": candidate_files,
-    #     "function_matches": function_matches,
-    #     "function_analysis": function_analysis,
-    #     "llm_context": llm_context,
-    #     "total_files": len(repo_files),
-    #     "total_matches": len(candidate_files),
-    #     "message": "✅ Root cause analysis complete"
-    # }
     return {
-
+        "status": "success",
+        "repo_status": repo_result["status"],
+        "sandbox_path": sandbox_path,
+        "signals": signals,
+        "candidate_files": candidate_files,
+        "function_matches": function_matches,
+        "function_analysis": function_analysis,
+        "llm_context": llm_context,
+        "total_files": len(repo_files),
+        "total_matches": len(candidate_files),
+        "message": "✅ Root cause analysis complete"
     }
 
 
