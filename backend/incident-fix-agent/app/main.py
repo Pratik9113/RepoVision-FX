@@ -4,33 +4,38 @@ Entry point of the application.
 Defines API endpoint to receive incident and trigger orchestration.
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from orchestrator import handle_incident
 from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI(title="Incident Fix Agent", version="1.0")
 
-# 🔧 STATIC CONFIG (for testing)
-REPO_URL = "https://github.com/Pratik9113/RAG-Powered-Chatbot-for-News-Websites.git" 
-INCIDENT_DESCRIPTION = "Node.js backend application running on http://localhost:5001 fails during startup due to Redis connection issue. "
+# Allow frontend (e.g. Vite on :5173) to call this API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
+class IncidentRequest(BaseModel):
+    repo_url: str
+    description: str
 
 @app.post("/incident")
-def process_incident():
+def process_incident(request: IncidentRequest):
     """
-    🚀 FINAL CLEAN FLOW (Static Version)
-    
-    Uses hardcoded:
-        - repo_url: "https://github.com/Pratik9113/RAG-Powered-Chatbot-for-News-Websites.git"
-        - description: "Build fails when using dynamic imports..."
-    
-    System:
-        - Clones repo to sandbox (or pulls if exists)
-        - Analyzes incident
-        - Returns results
+    Receives incident details from frontend and triggers analysis.
     """
-    return handle_incident(REPO_URL, INCIDENT_DESCRIPTION)
+    try:
+        result = handle_incident(request.repo_url, request.description)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/health")

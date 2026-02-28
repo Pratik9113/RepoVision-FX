@@ -11,9 +11,11 @@ Coordinates entire incident resolution pipeline.
 from services.repository_manager import clone_or_update_repo, get_repo_files
 from agents.incident_agent import extract_signals
 from services.search_service import search_files, search_by_function_name
+from utils.file_utils import read_file
 import json
 from groq import Groq
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -113,8 +115,6 @@ def handle_incident(repo_url: str, description: str):
 
 
 
-
-
     # STEP 6: Prepare context for LLM and perform root cause analysis
     print(f"\n▶️ STEP 6: Preparing Analysis Context & Analyzing Root Cause")
     llm_context = prepare_llm_context(candidate_files, function_matches, description)
@@ -134,7 +134,16 @@ def handle_incident(repo_url: str, description: str):
         print("⚠️ Groq API not configured, skipping LLM analysis")
         llm_context["root_cause_analysis"] = {"error": "Groq API key not available"}
 
-    
+    # STEP 7: Get content of related files, generate edits, and prepare for frontend
+    edited_files = []
+    if candidate_files and groq_client:
+        print(f"\n▶️ STEP 7: Reading critical files & generating suggested edits")
+        critical_paths = get_critical_file_paths(candidate_files, llm_context.get("root_cause_analysis") or {})
+        edited_files = generate_edits_for_files(
+            sandbox_path, critical_paths, llm_context.get("root_cause_analysis") or {}, description
+        )
+        print(f"📝 Generated edits for {len(edited_files)} files")
+
     return {
         "status": "success",
         "repo_status": repo_result["status"],
@@ -144,6 +153,7 @@ def handle_incident(repo_url: str, description: str):
         "function_matches": function_matches,
         "function_analysis": function_analysis,
         "llm_context": llm_context,
+        "edited_files": edited_files,
         "total_files": len(repo_files),
         "total_matches": len(candidate_files),
         "message": "✅ Root cause analysis complete"
@@ -193,7 +203,7 @@ Return ONLY valid JSON:
     
     try:
         response = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",
             messages=[
                 {"role": "system", "content": "You are an expert code analyzer. Return ONLY valid JSON."},
                 {"role": "user", "content": prompt}
@@ -236,50 +246,50 @@ def analyze_root_cause_with_groq(candidate_files: list, function_matches: list, 
     ])
     
     prompt = f"""
-You are a senior software engineer analyzing a critical incident.
+    You are a senior software engineer analyzing a critical incident.
 
-🐛 INCIDENT DESCRIPTION:
-{description}
+    🐛 INCIDENT DESCRIPTION:
+    {description}
 
-📊 SIGNALS EXTRACTED BY AI:
-- Error Types: {signals.get('error_types', [])}
-- Functions: {signals.get('functions', [])}
-- File Paths: {signals.get('file_paths', [])}
-- Keywords: {signals.get('keywords', [])}
-- Root Cause Guess: {signals.get('root_cause_guess', 'Unknown')}
+    📊 SIGNALS EXTRACTED BY AI:
+    - Error Types: {signals.get('error_types', [])}
+    - Functions: {signals.get('functions', [])}
+    - File Paths: {signals.get('file_paths', [])}
+    - Keywords: {signals.get('keywords', [])}
+    - Root Cause Guess: {signals.get('root_cause_guess', 'Unknown')}
 
-🔍 RELEVANT FILES & MATCHES:
-{files_text}
+    🔍 RELEVANT FILES & MATCHES:
+    {files_text}
 
-📦 FUNCTIONS FOUND:
-{json.dumps(function_matches[:5], indent=2)}
+    📦 FUNCTIONS FOUND:
+    {json.dumps(function_matches[:5], indent=2)}
 
-TASK - Provide comprehensive root cause analysis:
-1. What is the most likely root cause?
-2. Which files/functions are affected?
-3. What specific lines need investigation?
-4. Recommended steps to fix the issue
-5. Severity level (critical/high/medium/low)
+    TASK - Provide comprehensive root cause analysis:
+    1. What is the most likely root cause?
+    2. Which files/functions are affected?
+    3. What specific lines need investigation?
+    4. Recommended steps to fix the issue
+    5. Severity level (critical/high/medium/low)
 
-Return ONLY valid JSON:
-{{
-  "root_cause": "...",
-  "affected_components": ["..."],
-  "critical_files": [
-    {{"file": "...", "lines": [1, 2, 3], "reason": "..."}}
-  ],
-  "recommended_fixes": [
-    {{"step": 1, "action": "...", "file": "...", "description": "..."}}
-  ],
-  "severity": "critical|high|medium|low",
-  "confidence": 0.0,
-  "summary": "..."
-}}
+    Return ONLY valid JSON:
+    {{
+    "root_cause": "...",
+    "affected_components": ["..."],
+    "critical_files": [
+        {{"file": "...", "lines": [1, 2, 3], "reason": "..."}}
+    ],
+    "recommended_fixes": [
+        {{"step": 1, "action": "...", "file": "...", "description": "..."}}
+    ],
+    "severity": "critical|high|medium|low",
+    "confidence": 0.0,
+    "summary": "..."
+    }}
 """
     
     try:
         response = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",
             messages=[
                 {"role": "system", "content": "You are a senior code analyzer. Provide deep root cause analysis. Return ONLY valid JSON."},
                 {"role": "user", "content": prompt}
@@ -324,4 +334,134 @@ def prepare_llm_context(candidate_files: list, function_matches: list, descripti
     }
     
     return context
+
+
+def get_critical_file_paths(candidate_files: list, root_cause_analysis: dict) -> list:
+    """
+    Get 3-4 most relevant file paths for editing.
+    Prefer critical_files from root cause analysis, else top candidate_files by score.
+    """
+    paths = []
+    # Prefer LLM's critical_files if present
+    critical = root_cause_analysis.get("critical_files") or []
+    for cf in critical[:4]:
+        f = cf.get("file") if isinstance(cf, dict) else None
+        if f and f not in paths:
+            paths.append(f)
+    # Fill up to 4 with top candidate_files
+    for cf in candidate_files:
+        if len(paths) >= 4:
+            break
+        f = cf.get("file")
+        if f and f not in paths:
+            paths.append(f)
+    return paths[:4]
+
+
+def read_file_content(sandbox_path: str, relative_path: str) -> str | None:
+    """Read full file content from sandbox. Returns None if unreadable."""
+    try:
+        full_path = Path(sandbox_path) / relative_path
+        if not full_path.is_file():
+            return None
+        with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+            return f.read()
+    except Exception:
+        return None
+
+
+def generate_edits_for_files(
+    sandbox_path: str,
+    file_paths: list,
+    root_cause_analysis: dict,
+    description: str,
+) -> list:
+    """
+    For each critical file: read content, ask LLM for edited version, return list of
+    { file, original_content, edited_content, affected_lines, change_summary } for frontend.
+    """
+    if not groq_client or not file_paths:
+        return []
+
+    edited_list = []
+    root_cause = root_cause_analysis.get("root_cause") or "Unknown"
+    recommended = root_cause_analysis.get("recommended_fixes") or []
+    recommended_text = "\n".join([
+        f"- {r.get('action', r.get('description', ''))} (file: {r.get('file', '')})"
+        for r in recommended[:5] if isinstance(r, dict)
+    ]) if recommended else "None specified"
+
+    for rel_path in file_paths:
+        content = read_file_content(sandbox_path, rel_path)
+        if not content or len(content) > 50000:
+            continue
+
+        prompt = f"""You are a senior engineer applying a fix for an incident.
+            INCIDENT:
+            {description[:2000]}
+
+            ROOT CAUSE:
+            {root_cause}
+
+            RECOMMENDED FIXES:
+            {recommended_text}
+
+            FILE TO FIX (path: {rel_path}):
+            ``` 
+            {content}
+            ```
+
+            TASK: Produce the FULL corrected file content. Apply only the minimal changes needed to fix the issue. Preserve formatting and unrelated code. Return ONLY the file content inside a code block (no explanation outside). Use this format:
+            ``` 
+            <full file content here>
+            ```
+        """
+
+        try:
+            response = groq_client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[
+                    {"role": "system", "content": "You output only the corrected file content inside a single code block. No other text."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.2,
+                timeout=60
+            )
+            if not response or not response.choices:
+                continue
+            raw = response.choices[0].message.content.strip()
+            edited_content = raw
+            # Extract content from ``` ... ``` (take first code block body)
+            if "```" in raw:
+                parts = raw.split("```")
+                if len(parts) >= 2:
+                    block = parts[1].strip()
+                    if not block.lower().startswith("json"):
+                        edited_content = block
+                    elif len(parts) >= 3:
+                        edited_content = parts[2].strip()
+
+            # Simple affected lines: where content differs
+            orig_lines = content.splitlines()
+            edit_lines = edited_content.splitlines()
+            affected_lines = []
+            for i, (a, b) in enumerate(zip(orig_lines, edit_lines)):
+                if a != b:
+                    affected_lines.append(i + 1)
+            if len(edit_lines) != len(orig_lines):
+                for j in range(min(len(orig_lines), len(edit_lines)), max(len(orig_lines), len(edit_lines))):
+                    affected_lines.append(j + 1)
+
+            edited_list.append({
+                "file": rel_path,
+                "original_content": content,
+                "edited_content": edited_content,
+                "affected_lines": list(sorted(set(affected_lines)))[:50],
+                "change_summary": root_cause[:300]
+            })
+        except Exception as e:
+            print(f"⚠️ Edit generation failed for {rel_path}: {e}")
+            continue
+
+    return edited_list
 

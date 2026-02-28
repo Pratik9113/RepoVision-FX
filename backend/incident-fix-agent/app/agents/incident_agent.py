@@ -69,7 +69,7 @@ Incident Description:
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",
             messages=[
                 {"role": "system", "content": "You extract structured debugging signals."},
                 {"role": "user", "content": prompt}

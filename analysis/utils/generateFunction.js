@@ -255,7 +255,7 @@ Deliver:
     if (!apiKey) return fallback();
     const client = new Groq({ apiKey });
     const resp = await client.chat.completions.create({
-      model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+      model: process.env.GROQ_MODEL || "llama-3.1-8b-instant",
       temperature: 0.1,
       messages: [
         { role: "system", content: "You are concise and precise. No fluff." },
@@ -264,7 +264,7 @@ Deliver:
     });
     const content = resp?.choices?.[0]?.message?.content?.trim();
     if (!content) return fallback();
-    return { analysis: content, source: `Groq:${resp?.model || 'llama-3.3-70b-versatile'}` };
+    return { analysis: content, source: `Groq:${resp?.model || 'llama-3.1-8b-instant'}` };
   } catch (err) {
     console.error("Groq analysis error:", err?.message || err);
     return fallback();
@@ -469,7 +469,7 @@ ${content.substring(0, 10000)} // Truncated to 10k chars for token limits
 \`\`\``;
 
     const resp = await client.chat.completions.create({
-      model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+      model: process.env.GROQ_MODEL || "llama-3.1-8b-instant",
       temperature: 0,
       messages: [
         { role: "system", content: "You are a code analysis expert. Output ONLY valid JSON." },

@@ -1,9 +1,110 @@
 import { useState } from 'react';
-import { Send, AlertCircle, CheckCircle2, Loader2, Copy } from 'lucide-react';
+import { Send, AlertCircle, CheckCircle2, Loader2, Copy, FileCode, ChevronDown, ChevronUp } from 'lucide-react';
+
+function EditedFileCard({ edit }) {
+    const [showOriginal, setShowOriginal] = useState(false);
+    const [showEdited, setShowEdited] = useState(true);
+    const [copied, setCopied] = useState(false);
+
+    const copyEdited = () => {
+        navigator.clipboard.writeText(edit.edited_content);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    const originalLines = (edit.original_content || '').split('\n');
+    const editedLines = (edit.edited_content || '').split('\n');
+    const affected = edit.affected_lines || [];
+
+    return (
+        <div className="bg-slate-800/60 rounded-xl border border-slate-600/50 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 bg-slate-800/80 border-b border-slate-600/50">
+                <div className="flex items-center gap-2 min-w-0">
+                    <FileCode className="text-amber-400 shrink-0" size={18} />
+                    <code className="text-sm text-cyan-300 font-mono truncate">{edit.file}</code>
+                </div>
+                <button
+                    onClick={copyEdited}
+                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 text-xs font-medium"
+                >
+                    <Copy size={14} />
+                    {copied ? 'Copied!' : 'Copy edited'}
+                </button>
+            </div>
+            {edit.change_summary && (
+                <div className="px-4 py-2 text-xs text-slate-400 border-b border-slate-700/50">
+                    {edit.change_summary}
+                </div>
+            )}
+            {affected.length > 0 && (
+                <div className="px-4 py-2 flex flex-wrap gap-1.5 border-b border-slate-700/50">
+                    <span className="text-xs text-slate-500">Affected lines:</span>
+                    {affected.slice(0, 15).map((lineNum) => (
+                        <span key={lineNum} className="bg-red-500/20 text-red-300 px-1.5 py-0.5 rounded font-mono text-xs">
+                            L{lineNum}
+                        </span>
+                    ))}
+                    {affected.length > 15 && <span className="text-xs text-slate-500">+{affected.length - 15} more</span>}
+                </div>
+            )}
+            <div className="p-2">
+                <button
+                    type="button"
+                    onClick={() => setShowOriginal(!showOriginal)}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-slate-700/50 hover:bg-slate-700/70 text-slate-300 text-sm"
+                >
+                    <span>Original content</span>
+                    {showOriginal ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+                {showOriginal && (
+                    <pre className="mt-2 p-3 rounded-lg bg-black/50 border border-slate-700 text-xs text-slate-300 font-mono overflow-x-auto max-h-64 overflow-y-auto">
+                        {originalLines.map((line, i) => (
+                            <div key={i} className={affected.includes(i + 1) ? 'bg-red-500/10' : ''}>
+                                <span className="text-slate-500 select-none w-8 inline-block">{i + 1}</span> {line || ' '}
+                            </div>
+                        ))}
+                    </pre>
+                )}
+                <button
+                    type="button"
+                    onClick={() => setShowEdited(!showEdited)}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-slate-700/50 hover:bg-slate-700/70 text-slate-300 text-sm mt-2"
+                >
+                    <span>Edited content</span>
+                    {showEdited ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+                {showEdited && (
+                    <pre className="mt-2 p-3 rounded-lg bg-black/50 border border-green-700/50 text-xs text-slate-300 font-mono overflow-x-auto max-h-64 overflow-y-auto">
+                        {editedLines.map((line, i) => (
+                            <div key={i} className={affected.includes(i + 1) ? 'bg-green-500/10' : ''}>
+                                <span className="text-slate-500 select-none w-8 inline-block">{i + 1}</span> {line || ' '}
+                            </div>
+                        ))}
+                    </pre>
+                )}
+            </div>
+        </div>
+    );
+}
 
 export default function IncidentForm() {
     const [repoUrl, setRepoUrl] = useState('https://github.com/Pratik9113/RAG-Powered-Chatbot-for-News-Websites.git');
-    const [description, setDescription] = useState( "Node.js backend application running on http://localhost:5001 fails during startup due to Redis connection issue. ");
+    const [description, setDescription] = useState(`
+    file:///D:/internship/irs_project/backend/src/server.js:49
+    server.listen(PORT, () => {
+                        ^^
+
+    SyntaxError: Unexpected token '=>'
+        at compileSourceTextModule (node:internal/modules/esm/utils:357:16)
+        at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:109:18)
+        at #translate (node:internal/modules/esm/loader:564:20)
+        at afterLoad (node:internal/modules/esm/loader:614:29)
+        at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:619:12)
+        at #createModuleJob (node:internal/modules/esm/loader:643:36)
+        at #getJobFromResolveResult (node:internal/modules/esm/loader:353:34)
+        at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:318:41)
+        at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:685:25)
+    `);
     const [isLoading, setIsLoading] = useState(false);
     const [result, setResult] = useState(null);
     const [error, setError] = useState(null);
@@ -17,6 +118,13 @@ export default function IncidentForm() {
         try {
             const response = await fetch('http://localhost:8000/incident', {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    repo_url: repoUrl,
+                    description,
+                }),
             });
 
             if (!response.ok) {
@@ -26,7 +134,10 @@ export default function IncidentForm() {
             const data = await response.json();
             setResult(data);
         } catch (err) {
-            setError(err.message);
+            const msg = err.message === 'Failed to fetch'
+                ? 'Cannot reach the backend. Is the Incident Fix Agent running on http://localhost:8000? Start it with: cd backend/incident-fix-agent/app && uvicorn main:app --reload'
+                : err.message;
+            setError(msg);
         } finally {
             setIsLoading(false);
         }
@@ -207,6 +318,18 @@ export default function IncidentForm() {
                                                 <div className="text-green-400 font-mono">{match.file}:{match.line}</div>
                                                 <div className="text-slate-400 ml-2 font-mono text-xs truncate">{match.content}</div>
                                             </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Edited Files (suggested fixes) */}
+                            {result.edited_files && result.edited_files.length > 0 && (
+                                <div className="bg-black/40 rounded-lg p-4 border border-amber-500/40">
+                                    <p className="text-xs text-amber-400 uppercase tracking-wide mb-3">📝 Suggested Edits ({result.edited_files.length} files)</p>
+                                    <div className="space-y-4">
+                                        {result.edited_files.map((edit, idx) => (
+                                            <EditedFileCard key={idx} edit={edit} />
                                         ))}
                                     </div>
                                 </div>

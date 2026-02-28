@@ -10,7 +10,7 @@ const groq = new Groq({
 });
 
 export class LLMClient {
-    constructor(model = "llama-3.3-70b-versatile") {
+    constructor(model = "llama-3.1-8b-instant") {
         this.model = model;
     }
 

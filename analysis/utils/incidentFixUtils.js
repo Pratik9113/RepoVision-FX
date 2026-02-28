@@ -25,7 +25,7 @@ const generateRootCauseHypothesis = async (ticket, codeContext, errorLogs) => {
   `;
 
     const response = await groq.chat.completions.create({
-        model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+        model: process.env.GROQ_MODEL || "llama-3.1-8b-instant",
         messages: [
             { role: "system", content: "You are a senior debugger. Be precise and technical." },
             { role: "user", content: prompt }
@@ -59,7 +59,7 @@ const generateFixPatch = async (hypothesis, codeContext) => {
   `;
 
     const response = await groq.chat.completions.create({
-        model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+        model: process.env.GROQ_MODEL || "llama-3.1-8b-instant",
         messages: [
             { role: "system", content: "You are an expert software engineer. Output ONLY a unified diff." },
             { role: "user", content: prompt }
@@ -90,7 +90,7 @@ const reflectOnFailure = async (previousPatch, testResults, errorTrace) => {
   `;
 
     const response = await groq.chat.completions.create({
-        model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+        model: process.env.GROQ_MODEL || "llama-3.1-8b-instant",
         messages: [
             { role: "system", content: "You are a self-reflective debugging agent." },
             { role: "user", content: prompt }

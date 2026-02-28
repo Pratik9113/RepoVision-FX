@@ -230,7 +230,7 @@ def search_files(signals: Dict[str, Any], sandbox_path: str) -> List[Dict[str, A
                 function_names
             )
 
-            # 2️⃣ Structural scanning
+            # 2️⃣ Structural scanning            
             structural_result = structural_scan(file_path)
 
             final_score = matches["score"]
