@@ -11,12 +11,12 @@ Coordinates entire incident resolution pipeline.
 from services.repository_manager import clone_or_update_repo, get_repo_files
 from agents.incident_agent import extract_signals
 from services.search_service import search_files, search_by_function_name
+from services.edit_planner import build_edit_plan, apply_edit_plan
 from integration.github_pr_integration import GitHubPRCreator
 from dotenv import load_dotenv
 from groq import Groq
 import os
 import json
-from pathlib import Path
 
 # Load environment variables
 load_dotenv()
@@ -136,18 +136,27 @@ def handle_incident(repo_url: str, description: str):
         print("⚠️ Groq API not configured, skipping LLM analysis")
         llm_context["root_cause_analysis"] = {"error": "Groq API key not available"}
 
-    # STEP 7: Get content of related files, generate edits, and prepare for frontend
+    # STEP 7: Plan safe edits and generate suggested changes
     edited_files = []
+    edit_plan = None
     if candidate_files and groq_client:
-        print(f"\n STEP 7: Reading critical files & generating suggested edits")
-        critical_paths = get_critical_file_paths(candidate_files, llm_context.get("root_cause_analysis") or {})
-        edited_files = generate_edits_for_files(
-            sandbox_path, critical_paths, llm_context.get("root_cause_analysis") or {}, description
-        )
-        print(f"📝 Generated edits for {len(edited_files)} files")
+        print(f"\n STEP 7: Building edit plan & generating suggested edits")
+        edit_plan = build_edit_plan(signals, candidate_files, function_matches)
+        selected = edit_plan.get("selected_files") or []
 
-
-# In orchestrator.py - Replace STEP 8 with this:
+        if selected:
+            print(f"   ✅ Selected {len(selected)} high-confidence files for auto-edit")
+            edited_files = apply_edit_plan(
+                plan=edit_plan,
+                sandbox_path=sandbox_path,
+                description=description,
+                root_cause_analysis=llm_context.get("root_cause_analysis") or {},
+                groq_client=groq_client,
+                signals=signals,
+            )
+            print(f"📝 Generated edits for {len(edited_files)} files")
+        else:
+            print(f"   ℹ️ No files selected for auto-edit: {edit_plan.get('reason')}")
 
     # STEP 8: Create GitHub PR
     github_result = None
@@ -156,27 +165,28 @@ def handle_incident(repo_url: str, description: str):
         try:
             print(f"\n▶️ STEP 8: Creating GitHub PR")
             print(f"   📦 Repo: {GITHUB_REPO}")
-            print(f"   📝 Files to commit: {len(edited_files)}")            
+            print(f"   📝 Files to commit: {len(edited_files)}")
             pr_creator = GitHubPRCreator(GITHUB_TOKEN, GITHUB_REPO)
-            
+
             github_result = pr_creator.create_branch_and_pr(
                 sandbox_path=sandbox_path,
                 edited_files=edited_files,
-                root_cause_analysis=llm_context.get("root_cause_analysis") or {}
+                root_cause_analysis=llm_context.get("root_cause_analysis") or {},
             )
-            
+
             if github_result and github_result.get("pr_url"):
                 print(f"✅ PR Created: {github_result.get('pr_url')}")
             else:
                 print(f"⚠️ PR creation returned: {github_result}")
-                
+
         except Exception as e:
             print(f"❌ GitHub PR creation failed: {e}")
             import traceback
+
             traceback.print_exc()
             github_result = {
                 "status": "failed",
-                "error": str(e)
+                "error": str(e),
             }
     else:
         missing = []
@@ -198,10 +208,11 @@ def handle_incident(repo_url: str, description: str):
         "function_analysis": function_analysis,
         "llm_context": llm_context,
         "edited_files": edited_files,
+        "edit_plan": edit_plan,
         "total_files": len(repo_files),
         "total_matches": len(candidate_files),
         "message": "✅ Root cause analysis complete",
-        "github_integration": github_result
+        "github_integration": github_result,
     }
 
 
@@ -380,133 +391,4 @@ def prepare_llm_context(candidate_files: list, function_matches: list, descripti
     
     return context
 
-
-def get_critical_file_paths(candidate_files: list, root_cause_analysis: dict) -> list:
-    """
-    Get 3-4 most relevant file paths for editing.
-    Prefer critical_files from root cause analysis, else top candidate_files by score.
-    """
-    paths = []
-    # Prefer LLM's critical_files if present
-    critical = root_cause_analysis.get("critical_files") or []
-    for cf in critical[:4]:
-        f = cf.get("file") if isinstance(cf, dict) else None
-        if f and f not in paths:
-            paths.append(f)
-    # Fill up to 4 with top candidate_files
-    for cf in candidate_files:
-        if len(paths) >= 4:
-            break
-        f = cf.get("file")
-        if f and f not in paths:
-            paths.append(f)
-    return paths[:4]
-
-
-def read_file_content(sandbox_path: str, relative_path: str) -> str | None:
-    """Read full file content from sandbox. Returns None if unreadable."""
-    try:
-        full_path = Path(sandbox_path) / relative_path
-        if not full_path.is_file():
-            return None
-        with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-            return f.read()
-    except Exception:
-        return None
-
-
-def generate_edits_for_files(
-    sandbox_path: str,
-    file_paths: list,
-    root_cause_analysis: dict,
-    description: str,
-) -> list:
-    """
-    For each critical file: read content, ask LLM for edited version, return list of
-    { file, original_content, edited_content, affected_lines, change_summary } for frontend.
-    """
-    if not groq_client or not file_paths:
-        return []
-
-    edited_list = []
-    root_cause = root_cause_analysis.get("root_cause") or "Unknown"
-    recommended = root_cause_analysis.get("recommended_fixes") or []
-    recommended_text = "\n".join([
-        f"- {r.get('action', r.get('description', ''))} (file: {r.get('file', '')})"
-        for r in recommended[:5] if isinstance(r, dict)
-    ]) if recommended else "None specified"
-
-    for rel_path in file_paths:
-        content = read_file_content(sandbox_path, rel_path)
-        if not content or len(content) > 50000:
-            continue
-
-        prompt = f"""You are a senior engineer applying a fix for an incident.
-            INCIDENT:
-            {description[:2000]}
-
-            ROOT CAUSE:
-            {root_cause}
-
-            RECOMMENDED FIXES:
-            {recommended_text}
-
-            FILE TO FIX (path: {rel_path}):
-            ``` 
-            {content}
-            ```
-
-            TASK: Produce the FULL corrected file content. Apply only the minimal changes needed to fix the issue. Preserve formatting and unrelated code. Return ONLY the file content inside a code block (no explanation outside). Use this format:
-            ``` 
-            <full file content here>
-            ```
-        """
-
-        try:
-            response = groq_client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                messages=[
-                    {"role": "system", "content": "You output only the corrected file content inside a single code block. No other text."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.2,
-                timeout=60
-            )
-            if not response or not response.choices:
-                continue
-            raw = response.choices[0].message.content.strip()
-            edited_content = raw
-            # Extract content from ``` ... ``` (take first code block body)
-            if "```" in raw:
-                parts = raw.split("```")
-                if len(parts) >= 2:
-                    block = parts[1].strip()
-                    if not block.lower().startswith("json"):
-                        edited_content = block
-                    elif len(parts) >= 3:
-                        edited_content = parts[2].strip()
-
-            # Simple affected lines: where content differs
-            orig_lines = content.splitlines()
-            edit_lines = edited_content.splitlines()
-            affected_lines = []
-            for i, (a, b) in enumerate(zip(orig_lines, edit_lines)):
-                if a != b:
-                    affected_lines.append(i + 1)
-            if len(edit_lines) != len(orig_lines):
-                for j in range(min(len(orig_lines), len(edit_lines)), max(len(orig_lines), len(edit_lines))):
-                    affected_lines.append(j + 1)
-
-            edited_list.append({
-                "file": rel_path,
-                "original_content": content,
-                "edited_content": edited_content,
-                "affected_lines": list(sorted(set(affected_lines)))[:50],
-                "change_summary": root_cause[:300]
-            })
-        except Exception as e:
-            print(f"⚠️ Edit generation failed for {rel_path}: {e}")
-            continue
-
-    return edited_list
 
