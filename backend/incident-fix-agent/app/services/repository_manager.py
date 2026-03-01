@@ -9,7 +9,8 @@ Manages repository cloning and caching in sandbox.
 import os
 import hashlib
 import shutil
-from git import Repo
+from git import Repo  # pyright: ignore[reportMissingImports]
+from git.exc import GitCommandError, InvalidGitRepositoryError  # pyright: ignore[reportMissingImports]
 from pathlib import Path
 
 SANDBOX_BASE_PATH = Path(__file__).parent.parent.parent / "sandbox" / "cloned_repos"
@@ -47,22 +48,77 @@ def clone_or_update_repo(repo_url: str) -> dict:
         SANDBOX_BASE_PATH.mkdir(parents=True, exist_ok=True)
         
         sandbox_path = get_sandbox_path(repo_url)
-        
+
         if sandbox_path.exists():
-            # Repo already exists - pull latest
+            # If folder exists but is not a git repo, clean and reclone
+            git_dir = sandbox_path / ".git"
+            if not git_dir.exists():
+                print(f"⚠️ Sandbox exists but is not a git repo: {sandbox_path}. Cleaning and recloning...")
+                shutil.rmtree(sandbox_path, ignore_errors=True)
+                print(f"🔄 Cloning {repo_url} to {sandbox_path}...")
+                Repo.clone_from(repo_url, str(sandbox_path))
+                return {
+                    "status": "recloned",
+                    "sandbox_path": str(sandbox_path),
+                    "message": f"✅ Re-cloned repo to {sandbox_path} (was non-git folder)"
+                }
+
+            # Repo already exists - try to pull latest
             print(f"📦 Repo exists at {sandbox_path}. Pulling latest...")
-            repo = Repo(str(sandbox_path))
-            repo.remotes.origin.pull()
-            
-            return {
-                "status": "updated",
-                "sandbox_path": str(sandbox_path),
-                "message": f"✅ Updated repo from {repo_url}"
-            }
+            try:
+                repo = Repo(str(sandbox_path))
+            except InvalidGitRepositoryError as ge_repo:
+                # Folder has .git but is not a valid repo – clean and reclone
+                print(f"⚠️ Invalid git repo in sandbox ({sandbox_path}): {ge_repo}. Cleaning and recloning...")
+                shutil.rmtree(sandbox_path, ignore_errors=True)
+                print(f"🔄 Cloning {repo_url} to {sandbox_path}...")
+                Repo.clone_from(repo_url, str(sandbox_path))
+                return {
+                    "status": "recloned",
+                    "sandbox_path": str(sandbox_path),
+                    "message": f"✅ Re-cloned repo to {sandbox_path} (invalid git repo fixed)"
+                }
+
+            try:
+                repo.remotes.origin.pull()
+                return {
+                    "status": "updated",
+                    "sandbox_path": str(sandbox_path),
+                    "message": f"✅ Updated repo from {repo_url}"
+                }
+            except GitCommandError as ge:
+                # If pull fails (bad state, branch mismatch, etc.), reclone cleanly
+                print(f"⚠️ git pull failed, recloning sandbox: {ge}")
+                shutil.rmtree(sandbox_path, ignore_errors=True)
+                print(f"🔄 Re-cloning {repo_url} to {sandbox_path}...")
+                try:
+                    Repo.clone_from(repo_url, str(sandbox_path))
+                except GitCommandError as ge_clone:
+                    # Handle case where destination dir still exists / not empty
+                    if "already exists and is not an empty directory" in str(ge_clone):
+                        print("⚠️ Destination not empty on reclone, force-cleaning and retrying...")
+                        shutil.rmtree(sandbox_path, ignore_errors=True)
+                        Repo.clone_from(repo_url, str(sandbox_path))
+                    else:
+                        raise
+                return {
+                    "status": "recloned",
+                    "sandbox_path": str(sandbox_path),
+                    "message": f"✅ Re-cloned repo to {sandbox_path} after pull failure"
+                }
         else:
             # Clone fresh
             print(f"🔄 Cloning {repo_url} to {sandbox_path}...")
-            Repo.clone_from(repo_url, str(sandbox_path))
+            try:
+                Repo.clone_from(repo_url, str(sandbox_path))
+            except GitCommandError as ge_clone:
+                # Handle case where destination dir already exists / not empty
+                if "already exists and is not an empty directory" in str(ge_clone):
+                    print("⚠️ Destination not empty on fresh clone, cleaning and retrying...")
+                    shutil.rmtree(sandbox_path, ignore_errors=True)
+                    Repo.clone_from(repo_url, str(sandbox_path))
+                else:
+                    raise
             
             return {
                 "status": "cloned",

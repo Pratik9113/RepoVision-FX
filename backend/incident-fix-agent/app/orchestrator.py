@@ -11,16 +11,18 @@ Coordinates entire incident resolution pipeline.
 from services.repository_manager import clone_or_update_repo, get_repo_files
 from agents.incident_agent import extract_signals
 from services.search_service import search_files, search_by_function_name
-from utils.file_utils import read_file
-import json
+from integration.github_pr_integration import GitHubPRCreator
+from dotenv import load_dotenv
 from groq import Groq
 import os
+import json
 from pathlib import Path
-from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+GITHUB_REPO = os.getenv("GITHUB_REPO")
 
 def get_groq_client():
     """Initialize Groq client with error handling"""
@@ -86,18 +88,18 @@ def handle_incident(repo_url: str, description: str):
 
     
     # STEP 4: Search file CONTENTS
-    print(f"\n▶️ STEP 4: Searching File Contents in Sandbox")
+    print(f"\n STEP 4: Searching File Contents in Sandbox")
     candidate_files = search_files(signals, sandbox_path)
     print(f"🎯 Found {len(candidate_files)} files with matching content")
 
     # STEP 5: Search for specific functions (ONLY if we have function names)
     function_matches = []
     if signals.get("functions"):
-        print(f"\n▶️ STEP 5: Searching for Function Definitions")
+        print(f"\n STEP 5: Searching for Function Definitions")
         function_matches = search_by_function_name(sandbox_path, signals.get("functions", []))
         print(f"🔧 Found {len(function_matches)} function definitions")
     else:
-        print(f"\n▶️ STEP 5: No function names in query - skipping")
+        print(f"\n STEP 5: No function names in query - skipping")
     
     # Analyze function matches with Groq
     if function_matches and groq_client:
@@ -116,7 +118,7 @@ def handle_incident(repo_url: str, description: str):
 
 
     # STEP 6: Prepare context for LLM and perform root cause analysis
-    print(f"\n▶️ STEP 6: Preparing Analysis Context & Analyzing Root Cause")
+    print(f"\n STEP 6: Preparing Analysis Context & Analyzing Root Cause")
     llm_context = prepare_llm_context(candidate_files, function_matches, description)
     
     # Use Groq for root cause analysis
@@ -137,12 +139,54 @@ def handle_incident(repo_url: str, description: str):
     # STEP 7: Get content of related files, generate edits, and prepare for frontend
     edited_files = []
     if candidate_files and groq_client:
-        print(f"\n▶️ STEP 7: Reading critical files & generating suggested edits")
+        print(f"\n STEP 7: Reading critical files & generating suggested edits")
         critical_paths = get_critical_file_paths(candidate_files, llm_context.get("root_cause_analysis") or {})
         edited_files = generate_edits_for_files(
             sandbox_path, critical_paths, llm_context.get("root_cause_analysis") or {}, description
         )
         print(f"📝 Generated edits for {len(edited_files)} files")
+
+
+# In orchestrator.py - Replace STEP 8 with this:
+
+    # STEP 8: Create GitHub PR
+    github_result = None
+
+    if edited_files and GITHUB_REPO and GITHUB_TOKEN:
+        try:
+            print(f"\n▶️ STEP 8: Creating GitHub PR")
+            print(f"   📦 Repo: {GITHUB_REPO}")
+            print(f"   📝 Files to commit: {len(edited_files)}")            
+            pr_creator = GitHubPRCreator(GITHUB_TOKEN, GITHUB_REPO)
+            
+            github_result = pr_creator.create_branch_and_pr(
+                sandbox_path=sandbox_path,
+                edited_files=edited_files,
+                root_cause_analysis=llm_context.get("root_cause_analysis") or {}
+            )
+            
+            if github_result and github_result.get("pr_url"):
+                print(f"✅ PR Created: {github_result.get('pr_url')}")
+            else:
+                print(f"⚠️ PR creation returned: {github_result}")
+                
+        except Exception as e:
+            print(f"❌ GitHub PR creation failed: {e}")
+            import traceback
+            traceback.print_exc()
+            github_result = {
+                "status": "failed",
+                "error": str(e)
+            }
+    else:
+        missing = []
+        if not edited_files:
+            missing.append("edited_files")
+        if not GITHUB_REPO:
+            missing.append("GITHUB_REPO")
+        if not GITHUB_TOKEN:
+            missing.append("GITHUB_TOKEN")
+        print(f"⚠️ Skipping GitHub PR - missing: {', '.join(missing)}")
 
     return {
         "status": "success",
@@ -156,7 +200,8 @@ def handle_incident(repo_url: str, description: str):
         "edited_files": edited_files,
         "total_files": len(repo_files),
         "total_matches": len(candidate_files),
-        "message": "✅ Root cause analysis complete"
+        "message": "✅ Root cause analysis complete",
+        "github_integration": github_result
     }
 
 
