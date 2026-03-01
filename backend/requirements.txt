@@ -3,3 +3,4 @@ uvicorn
 gitpython 
 python-multipart 
 aiofiles
+PyGithub
