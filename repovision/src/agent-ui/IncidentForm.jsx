@@ -90,20 +90,11 @@ function EditedFileCard({ edit }) {
 export default function IncidentForm() {
     const [repoUrl, setRepoUrl] = useState('https://github.com/Pratik9113/RAG-Powered-Chatbot-for-News-Websites.git');
     const [description, setDescription] = useState(`
-    file:///D:/internship/irs_project/backend/src/server.js:49
-    server.listen(PORT, () => {
-                        ^^
-
-    SyntaxError: Unexpected token '=>'
-        at compileSourceTextModule (node:internal/modules/esm/utils:357:16)
-        at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:109:18)
-        at #translate (node:internal/modules/esm/loader:564:20)
-        at afterLoad (node:internal/modules/esm/loader:614:29)
-        at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:619:12)
-        at #createModuleJob (node:internal/modules/esm/loader:643:36)
-        at #getJobFromResolveResult (node:internal/modules/esm/loader:353:34)
-        at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:318:41)
-        at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:685:25)
+        ReferenceError: embedTexts is not defined
+        at embedText (file:///D:/internship/irs_project/backend/src/services/embeddings.js:28:17)
+        at retrieveContexts (file:///D:/internship/irs_project/backend/src/services/retrieval.js:10:18)
+        at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+        at async file:///D:/internship/irs_project/backend/src/routes/chat.js:56
     `);
     const [isLoading, setIsLoading] = useState(false);
     const [result, setResult] = useState(null);
