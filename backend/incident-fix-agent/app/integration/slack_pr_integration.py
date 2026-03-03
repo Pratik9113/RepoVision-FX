@@ -47,7 +47,7 @@ class SlackPRIntegration:
         self.channel_id = os.getenv("SLACK_CHANNEL")
 
         if not all([self.bot_token, self.app_token, self.signing_secret]):
-            print("⚠️ Slack credentials missing in .env (SLACK_BOT_TOKEN, SLACK_APP_TOKEN, SLACK_SIGNING_SECRET)")
+            print("Slack credentials missing in .env (SLACK_BOT_TOKEN, SLACK_APP_TOKEN, SLACK_SIGNING_SECRET)")
             self.app = None
             self.handler = None
             self.is_running = False
@@ -57,8 +57,25 @@ class SlackPRIntegration:
         self.handler = None
         self.is_running = False
 
+        self._processed_msg_ids = set()
+        self._msg_id_lock = threading.Lock()
         self._setup_handlers()
-        print("✅ Slack PR integration initialized")
+        print("Slack PR integration initialized")
+
+    def _should_process(self, event) -> bool:
+        """Deduplicate events based on client_msg_id"""
+        msg_id = event.get("client_msg_id") or event.get("event_ts")
+        if not msg_id:
+            return True
+        
+        with self._msg_id_lock:
+            if msg_id in self._processed_msg_ids:
+                return False
+            self._processed_msg_ids.add(msg_id)
+            # Keep set size reasonable
+            if len(self._processed_msg_ids) > 1000:
+                self._processed_msg_ids.clear()
+            return True
 
     def _setup_handlers(self):
         @self.app.command("/repovision-fix")
@@ -73,7 +90,7 @@ class SlackPRIntegration:
 
             if not incident_text:
                 say(
-                    "❌ Please describe the incident.\n"
+                    "Please describe the incident.\n"
                     "Example:\n"
                     "`/repovision-fix payments-api returning 500s`\n"
                     "Or with repo:\n"
@@ -81,7 +98,7 @@ class SlackPRIntegration:
                 )
                 return
 
-            say(f"🔍 Analyzing: *{incident_text}*\n👤 Requested by <@{user_id}>")
+            say(f"Analyzing: *{incident_text}*\nRequested by <@{user_id}>")
 
             thread = threading.Thread(
                 target=self._process_incident,
@@ -92,6 +109,9 @@ class SlackPRIntegration:
 
         @self.app.event("app_mention")
         def handle_mention(event, say):
+            if not self._should_process(event):
+                return
+
             text = event.get("text", "")
             user = event.get("user")
             channel = event.get("channel")
@@ -101,10 +121,10 @@ class SlackPRIntegration:
 
             repo_url_from_msg, incident_text = _parse_repo_and_incident(text)
             if not incident_text:
-                say("❌ Please describe the incident after mentioning me.")
+                say("Please describe the incident after mentioning me.")
                 return
 
-            say(f"🔄 Processing: {incident_text}")
+            say(f"Processing: {incident_text}")
 
             thread = threading.Thread(
                 target=self._process_incident,
@@ -117,6 +137,9 @@ class SlackPRIntegration:
         def handle_message(event, say):
             # ignore bot messages
             if event.get("bot_id"):
+                return
+            
+            if not self._should_process(event):
                 return
 
             # only respond in a dedicated channel (optional)
@@ -147,7 +170,7 @@ class SlackPRIntegration:
             user = event.get("user")
             channel = event.get("channel")
 
-            say(f"🚀 *RepoVisionFX Agent* has detected an issue report!\n🔍 Analyzing: \"_{text}_\"")
+            say(f"*RepoVisionFX Agent* has detected an issue report!\nAnalyzing: \"_{text}_\"")
 
             thread = threading.Thread(target=self._process_incident, args=(text, channel, user, None))
             thread.daemon = True
@@ -162,19 +185,18 @@ class SlackPRIntegration:
                 slug = os.getenv("GITHUB_REPO").strip()
                 if "/" in slug:
                     repo_url = f"https://github.com/{(slug)}.git"
-                    print(f"ℹ️ Auto-constructed repo URL from GITHUB_REPO: {repo_url}")
+                    print(f"Auto-constructed repo URL from GITHUB_REPO: {repo_url}")
 
             if not repo_url:
-                print(f"⚠️ Missing repo URL for incident: {incident_text}")
                 self.send_message(
                     channel,
-                    "❌ *Missing repository URL.*\n"
+                    "Missing repository URL.\n"
                     "Please set `GITHUB_REPO_URL` in `.env` OR pass it in the command:\n"
                     "`/repovision-fix https://github.com/org/repo.git <incident>`",
                 )
                 return
 
-            self.send_message(channel, f"🛠️ *Starting Autonomous Fix Pipeline*\n📦 Repo: `{repo_url}`\n📝 Task: {incident_text}")
+            self.send_message(channel, f"Starting Autonomous Fix Pipeline\nRepo: `{repo_url}`\nTask: {incident_text}")
 
             from app.orchestrator import handle_incident
 
@@ -183,10 +205,10 @@ class SlackPRIntegration:
             if result.get("status") == "success":
                 self._send_success_message(channel, result, user)
             else:
-                self.send_message(channel, f"❌ Failed: {result.get('message', 'Unknown error')}")
+                self.send_message(channel, f"Failed: {result.get('message', 'Unknown error')}")
 
         except Exception as e:
-            self.send_message(channel, f"⚠️ Error: {str(e)}\n```{traceback.format_exc()}```")
+            self.send_message(channel, f"Error: {str(e)}\n```{traceback.format_exc()}```")
 
     def _send_success_message(self, channel: str, result: dict, user: str):
         llm_context = result.get("llm_context") or {}
@@ -201,7 +223,7 @@ class SlackPRIntegration:
         pr_url = github.get("pr_url")
 
         msg = []
-        msg.append("✅ Incident analysis complete")
+        msg.append("Incident analysis complete")
         msg.append(f"*Root cause:* {root_cause}")
         msg.append(f"*Severity:* {severity}")
         if confidence is not None:
@@ -220,12 +242,12 @@ class SlackPRIntegration:
             plan = result.get("edit_plan") or {}
             reason = plan.get("reason")
             if reason:
-                msg.append(f"\nℹ️ No auto-edits applied: {reason}")
+                msg.append(f"\nNo auto-edits applied: {reason}")
 
         if pr_url:
             msg.append(f"\n🔗 PR: {pr_url}")
 
-        msg.append(f"\n👤 Requested by <@{user}>")
+        msg.append(f"\nRequested by <@{user}>")
         self.send_message(channel, "\n".join(msg))
 
     def send_message(self, channel: str, text: str):
@@ -234,16 +256,16 @@ class SlackPRIntegration:
         try:
             self.app.client.chat_postMessage(channel=channel, text=text)
         except Exception as e:
-            print(f"⚠️ Failed to send Slack message: {e}")
+            print(f"Failed to send Slack message: {e}")
 
     def send_incident_update(self, channel: str, step: str, message: str):
         self.send_message(channel, f"• {step}: {message}")
 
     def start(self):
         if not self.app:
-            print("❌ Cannot start Slack bot - missing credentials")
+            print("Cannot start Slack bot - missing credentials")
             return
-        print("🤖 Starting Slack Bot (Socket Mode)…")
+        print("Starting Slack Bot (Socket Mode)…")
         self.is_running = True
         self.handler = SocketModeHandler(self.app, self.app_token)
         self.handler.start()
@@ -252,7 +274,7 @@ class SlackPRIntegration:
         if self.handler:
             self.handler.close()
         self.is_running = False
-        print("🛑 Slack bot stopped")
+        print("Slack bot stopped")
 
 
 _slack_instance: Optional[SlackPRIntegration] = None
@@ -268,7 +290,7 @@ def get_slack_service() -> Optional[SlackPRIntegration]:
 def start_slack_bot() -> Optional[SlackPRIntegration]:
     service = get_slack_service()
     if not service or not service.app:
-        print("❌ Slack not configured - check .env file")
+        print("Slack not configured - check .env file")
         return None
 
     # IMPORTANT: SocketModeHandler installs signal handlers, which must run

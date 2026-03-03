@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 export function useRepoVision() {
-    const [repoUrl, setRepoUrl] = useState("https://github.com/Pratik9113/RAG-Powered-Chatbot-for-News-Websites");
+    const [repoUrl, setRepoUrl] = useState("https://github.com/Pratik9113/repoFXError");
     const [isLoading, setIsLoading] = useState(false);
     const [data, setData] = useState(null);
     const [error, setError] = useState("");

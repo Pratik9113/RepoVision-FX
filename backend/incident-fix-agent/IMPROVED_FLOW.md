@@ -168,7 +168,7 @@ function_matches = search_by_function_name(sandbox_path, functions)
 
 ### Input
 ```
-Repo: https://github.com/Pratik9113/RAG-Powered-Chatbot-for-News-Websites.git
+Repo: https://github.com/Pratik9113/repoFXError.git
 Description: "Build fails when saving embeddings to database with TypeError on line 42"
 ```
 

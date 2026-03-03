@@ -20,7 +20,7 @@ def test_incident_analysis():
     try:
         # POST with required JSON body
         payload = {
-            "repo_url": "https://github.com/Pratik9113/RAG-Powered-Chatbot-for-News-Websites.git",
+            "repo_url": "https://github.com/Pratik9113/repoFXError.git",
             "description": "App crashes when saving embeddings to database with TypeError ",
             "slack_channel": None
         }

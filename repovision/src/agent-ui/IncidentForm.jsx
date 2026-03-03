@@ -88,7 +88,7 @@ function EditedFileCard({ edit }) {
 }
 
 export default function IncidentForm() {
-    const [repoUrl, setRepoUrl] = useState('https://github.com/Pratik9113/RAG-Powered-Chatbot-for-News-Websites.git');
+    const [repoUrl, setRepoUrl] = useState('https://github.com/Pratik9113/repoFXError.git');
     const [description, setDescription] = useState(`
         ReferenceError: embedTexts is not defined
         at embedText (file:///D:/internship/irs_project/backend/src/services/embeddings.js:28:17)
@@ -143,7 +143,7 @@ export default function IncidentForm() {
             {/* Form Section */}
             <div className="bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl">
                 <h2 className="text-2xl font-bold text-white mb-6">🔍 Incident Analyzer</h2>
-                
+
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* Repo URL Field */}
                     <div>

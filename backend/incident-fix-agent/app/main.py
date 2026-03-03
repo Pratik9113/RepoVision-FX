@@ -13,19 +13,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-# Ensure repo root (parent of app/) is on sys.path.
-# This allows running:
-# - from repo root:   uvicorn app.main:app --reload
-# - from app folder:  uvicorn main:app --reload
 _repo_root = Path(__file__).resolve().parent.parent
 if str(_repo_root) not in sys.path:
     sys.path.insert(0, str(_repo_root))
 
-from app.orchestrator import handle_incident  # noqa: E402
+from app.orchestrator import handle_incident
 
 load_dotenv()
 
-app = FastAPI(title="Incident Fix Agent", version="1.0")
+app = FastAPI(title="RepoVisionAI-FX", version="1.0")
 
 app.add_middleware(
     CORSMiddleware,
