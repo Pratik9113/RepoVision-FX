@@ -282,7 +282,7 @@ def is_relevant_file(filename: str) -> bool:
         '.py', '.js', '.ts', '.java', '.go', '.rb',
         '.php', '.cpp', '.c', '.h', '.cs',
         '.json', '.yaml', '.yml', '.toml', '.ini',
-        '.md', '.txt',
+        '.txt',
         '.html', '.css', '.jsx', '.tsx',
         '.sql', '.conf', '.env', '.sh', '.bash'
     }

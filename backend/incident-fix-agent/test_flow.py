@@ -18,8 +18,13 @@ def test_incident_analysis():
     print("=" * 50)
     
     try:
-        # No JSON body needed - using static config
-        response = requests.post(f"{API_URL}/incident")
+        # POST with required JSON body
+        payload = {
+            "repo_url": "https://github.com/Pratik9113/RAG-Powered-Chatbot-for-News-Websites.git",
+            "description": "App crashes when saving embeddings to database with TypeError ",
+            "slack_channel": None
+        }
+        response = requests.post(f"{API_URL}/incident", json=payload)
         result = response.json()
         
         print(f"\n✅ Response (Status: {response.status_code}):")
@@ -27,17 +32,32 @@ def test_incident_analysis():
         
         if result.get("status") == "success":
             print("\n📊 Summary:")
-            print(f"  • Repo Status: {result['repo_status']}")
-            print(f"  • Sandbox Path: {result['sandbox_path']}")
-            print(f"  • Total Files: {result['total_files']}")
-            print(f"  • Candidate Files: {len(result['candidate_files'])}")
-            print(f"  • Keywords Found: {result['signals'].get('keywords')}")
+            print(f"  • Repo Status:     {result['repo_status']}")
+            print(f"  • Total Code Files: {result['total_files']}")
+            print(f"  • Candidate Files:  {len(result['candidate_files'])}")
+            
+            # Show Edit Details
+            edited = result.get("edited_files", [])
+            print(f"  • Files Edited:     {len(edited)}")
+            for f in edited:
+                print(f"    - {f['file']} (Lines: {f.get('affected_lines')})")
+
+            # Show PR Status
+            github = result.get("github_integration") or {}
+            if github.get("pr_url"):
+                print(f"  🚀 PR Created:      {github['pr_url']}")
+            elif result.get("edit_plan", {}).get("reason"):
+                print(f"  ℹ️  PR Skip Reason:  {result['edit_plan']['reason']}")
+            else:
+                print("  ⚠️ PR Status:       Not created (check GITHUB_TOKEN/REPO config)")
             
     except requests.exceptions.ConnectionError:
         print("\n❌ Could not connect to API")
-        print("   Make sure backend is running: uvicorn main:app --reload")
+        print("   Make sure backend is running: uvicorn app.main:app --reload")
     except Exception as e:
         print(f"\n❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def startup_commands():

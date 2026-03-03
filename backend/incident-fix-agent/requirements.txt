@@ -3,4 +3,5 @@ uvicorn
 gitpython
 pydantic
 groq
+slack-bolt
 llm

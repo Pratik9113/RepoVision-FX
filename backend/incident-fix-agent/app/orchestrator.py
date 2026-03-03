@@ -8,11 +8,12 @@ Coordinates entire incident resolution pipeline.
 5. Send to LLM for root cause analysis
 """
 
-from services.repository_manager import clone_or_update_repo, get_repo_files
-from agents.incident_agent import extract_signals
-from services.search_service import search_files, search_by_function_name
-from services.edit_planner import build_edit_plan, apply_edit_plan
-from integration.github_pr_integration import GitHubPRCreator
+from app.services.repository_manager import clone_or_update_repo, get_repo_files
+from app.agents.incident_agent import extract_signals
+from app.services.search_service import search_files, search_by_function_name
+from app.services.edit_planner import build_edit_plan, apply_edit_plan
+from app.integration.github_pr_integration import GitHubPRCreator
+from app.integration.slack_service import get_slack_service
 from dotenv import load_dotenv
 from groq import Groq
 import os
@@ -39,7 +40,17 @@ def get_groq_client():
 groq_client = get_groq_client()
 
 
-def handle_incident(repo_url: str, description: str):
+def _send_slack_update(slack_channel: str, step: str, message: str):
+    try:
+        slack = get_slack_service()
+        if slack:
+            slack.send_incident_update(slack_channel, step, message)
+    except Exception:
+        # Never fail the pipeline due to Slack
+        pass
+
+
+def handle_incident(repo_url: str, description: str, slack_channel: str = None):
     """
     🚀 IMPROVED INCIDENT ANALYSIS FLOW
     
@@ -53,6 +64,8 @@ def handle_incident(repo_url: str, description: str):
     
     # STEP 1: Clone/Update Repository
     print(f"\n▶ STEP 1: Handling Repository")
+    if slack_channel:
+        _send_slack_update(slack_channel, "1/8", "Cloning/updating repository…")
     repo_result = clone_or_update_repo(repo_url)
     
     if repo_result["status"] == "error":
@@ -64,42 +77,43 @@ def handle_incident(repo_url: str, description: str):
     sandbox_path = repo_result["sandbox_path"]
     print(repo_result["message"])
     
-    # STEP 2: List available files in sandbox   -- done 
-    print(f"\n  STEP 2: Scanning Repository Files")
+    # STEP 2: List available files in sandbox
+    print(f"\n▶ STEP 2: Scanning Repository Files")
+    if slack_channel:
+        _send_slack_update(slack_channel, "2/8", "Scanning and indexing repository files…")
     repo_files = get_repo_files(sandbox_path)
-        # Print all files
-    for i, file in enumerate(repo_files, start=1):
-        print(f"{i}. {file}") 
     print(f"📋 Found {len(repo_files)} files in sandbox")
-    
 
-
-
-
-    # STEP 3: Extract incident signals   -- done 
-    print(f"\n STEP 3: Analyzing Incident Description (Smart Parsing)")
+    # STEP 3: Extract incident signals
+    print(f"\n▶ STEP 3: Analyzing Incident Description (Smart Parsing)")
+    if slack_channel:
+        _send_slack_update(slack_channel, "3/8", "Extracting debugging signals from description…")
     signals = extract_signals(description, repo_files)
     
     print(f"  • Error Types: {signals.get('error_types', [])}")
     print(f"  • Functions: {signals.get('functions', [])}")
     print(f"  • File Paths: {signals.get('file_paths', [])}")
-    print(f"  • Line Numbers: {signals.get('line_numbers', [])}")
     print(f"  • Keywords: {signals.get('keywords', [])[:10]}")
 
-    
     # STEP 4: Search file CONTENTS
-    print(f"\n STEP 4: Searching File Contents in Sandbox")
+    print(f"\n▶ STEP 4: Searching File Contents in Sandbox")
+    if slack_channel:
+        _send_slack_update(slack_channel, "4/8", "Searching codebase for matches and patterns…")
     candidate_files = search_files(signals, sandbox_path)
     print(f"🎯 Found {len(candidate_files)} files with matching content")
 
-    # STEP 5: Search for specific functions (ONLY if we have function names)
+    # STEP 5: Search for specific functions
     function_matches = []
+    print(f"\n▶ STEP 5: Searching for Function Definitions")
     if signals.get("functions"):
-        print(f"\n STEP 5: Searching for Function Definitions")
+        if slack_channel:
+            _send_slack_update(slack_channel, "5/8", "Finding function definitions and structures…")
         function_matches = search_by_function_name(sandbox_path, signals.get("functions", []))
         print(f"🔧 Found {len(function_matches)} function definitions")
     else:
-        print(f"\n STEP 5: No function names in query - skipping")
+        if slack_channel:
+            _send_slack_update(slack_channel, "5/8", "No function names extracted - skipping lookup")
+        print(f"ℹ️ No function names in query - skipping")
     
     # Analyze function matches with Groq
     if function_matches and groq_client:
@@ -109,21 +123,16 @@ def handle_incident(repo_url: str, description: str):
             signals,
             description
         )
-        print(f"✅ Function analysis: {function_analysis.get('summary', 'Analysis complete')}")
     else:
         function_analysis = {"functions": function_matches, "summary": "No analysis available"}
-    
 
-
-
-
-    # STEP 6: Prepare context for LLM and perform root cause analysis
-    print(f"\n STEP 6: Preparing Analysis Context & Analyzing Root Cause")
+    # STEP 6: Root Cause Analysis
+    print(f"\n▶ STEP 6: Performing Root Cause Analysis")
+    if slack_channel:
+        _send_slack_update(slack_channel, "6/8", "Running AI deep analysis for root cause…")
     llm_context = prepare_llm_context(candidate_files, function_matches, description)
     
-    # Use Groq for root cause analysis
     if groq_client:
-        print(f"🧠 Running Groq root cause analysis...")
         root_cause_analysis = analyze_root_cause_with_groq(
             candidate_files,
             function_matches,
@@ -136,11 +145,13 @@ def handle_incident(repo_url: str, description: str):
         print("⚠️ Groq API not configured, skipping LLM analysis")
         llm_context["root_cause_analysis"] = {"error": "Groq API key not available"}
 
-    # STEP 7: Plan safe edits and generate suggested changes
+    # STEP 7: Plan and Apply Edits
     edited_files = []
     edit_plan = None
+    print(f"\n▶ STEP 7: Planning and Generating Recommended Edits")
     if candidate_files and groq_client:
-        print(f"\n STEP 7: Building edit plan & generating suggested edits")
+        if slack_channel:
+            _send_slack_update(slack_channel, "7/8", "Generating targeted code fixes…")
         edit_plan = build_edit_plan(signals, candidate_files, function_matches)
         selected = edit_plan.get("selected_files") or []
 
@@ -160,10 +171,12 @@ def handle_incident(repo_url: str, description: str):
 
     # STEP 8: Create GitHub PR
     github_result = None
+    print(f"\n▶ STEP 8: Creating GitHub Pull Request")
+    if slack_channel:
+        _send_slack_update(slack_channel, "8/8", "Finalizing and pushing changes to GitHub…")
 
     if edited_files and GITHUB_REPO and GITHUB_TOKEN:
         try:
-            print(f"\n▶️ STEP 8: Creating GitHub PR")
             print(f"   📦 Repo: {GITHUB_REPO}")
             print(f"   📝 Files to commit: {len(edited_files)}")
             pr_creator = GitHubPRCreator(GITHUB_TOKEN, GITHUB_REPO)
@@ -214,7 +227,6 @@ def handle_incident(repo_url: str, description: str):
         "message": "✅ Root cause analysis complete",
         "github_integration": github_result,
     }
-
 
 def analyze_functions_with_groq(function_matches: list, signals: dict, description: str) -> dict:
     """

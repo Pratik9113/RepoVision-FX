@@ -138,7 +138,28 @@ function_matches = search_by_function_name(sandbox_path, functions)
 │ • Original incident description      │
 └──────────────────────────────────────┘
         ↓
-🤖 Ready for Root Cause Analysis
+┌──────────────────────────────────────┐
+│ 🧠 Root Cause Analysis               │
+├──────────────────────────────────────┤
+│ Deep analysis of the context items   │
+│ to find the exact source of failure. │
+└──────────────────────────────────────┘
+        ↓
+┌──────────────────────────────────────┐
+│ 📝 Plan & Apply Edits                │
+├──────────────────────────────────────┤
+│ Generate targeted code fixes for     │
+│ high-confidence files.               │
+└──────────────────────────────────────┘
+        ↓
+┌──────────────────────────────────────┐
+│ 🔗 GitHub PR Creation                │
+├──────────────────────────────────────┤
+│ Create branch, commit changes, and   │
+│ open a Pull Request automatically.   │
+└──────────────────────────────────────┘
+        ↓
+🤖 Incident Resolved!
 ```
 
 ---

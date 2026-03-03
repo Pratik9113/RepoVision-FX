@@ -4,3 +4,5 @@ gitpython
 python-multipart 
 aiofiles
 PyGithub
+slack_bolt
+llm
