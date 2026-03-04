@@ -4,4 +4,6 @@ gitpython
 pydantic
 groq
 slack-bolt
-llm
+PyGithub
+python-dotenv
+aiohttp

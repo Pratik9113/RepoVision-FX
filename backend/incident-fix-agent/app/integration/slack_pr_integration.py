@@ -3,8 +3,8 @@ import threading
 import traceback
 from typing import Optional, Tuple
 
-from slack_bolt import App
-from slack_bolt.adapter.socket_mode import SocketModeHandler
+from slack_bolt import App # pyright: ignore[reportMissingImports]
+from slack_bolt.adapter.socket_mode import SocketModeHandler # pyright: ignore[reportMissingImports]
 from dotenv import load_dotenv
 
 load_dotenv()
