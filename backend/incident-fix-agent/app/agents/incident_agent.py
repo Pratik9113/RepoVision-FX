@@ -48,25 +48,62 @@ def extract_signals_with_groq(description: str) -> dict:
         return {}
 
     prompt = f"""
-You are a senior software debugging assistant.
+        You are an expert software debugging AI used in an autonomous incident response system.
 
-Analyze this incident description and extract structured debugging signals.
+        Your task is to analyze an incident description and extract structured debugging signals
+        that will help locate the root cause inside a source code repository.
 
-Return ONLY valid JSON in this format:
+        IMPORTANT RULES:
 
-{{
-  "error_types": [],
-  "functions": [],
-  "file_paths": [],
-  "line_numbers": [],
-  "keywords": [],
-  "root_cause_guess": ""
-}}
+        1. Extract ONLY signals that appear or are strongly implied in the text.
+        2. Do NOT hallucinate functions, files, or errors.
+        3. If something is not present, return an empty list.
+        4. Return STRICT JSON only.
+        5. Do NOT include explanations or markdown.
+        6. The output MUST be valid JSON.
 
-Incident Description:
-\"\"\"{description}\"\"\"
-"""
+        Extract the following fields:
 
+        error_types:
+        Programming or runtime errors such as:
+        TypeError, ReferenceError, NullPointerException, ImportError, SyntaxError, SegmentationFault.
+
+        functions:
+        Function or method names mentioned in stack traces, logs, or descriptions.
+
+        file_paths:
+        Any file paths or filenames mentioned (example: src/api/user.js, services/auth.py).
+
+        line_numbers:
+        Line numbers mentioned in stack traces.
+
+        keywords:
+        Important debugging keywords including:
+        - library names
+        - framework names
+        - API names
+        - database names
+        - variable names
+        - config names
+        - error messages
+
+        root_cause_guess:
+        A short 1 sentence guess about the probable cause of the incident.
+
+        Output Format (STRICT):
+
+        {{
+        "error_types": [],
+        "functions": [],
+        "file_paths": [],
+        "line_numbers": [],
+        "keywords": [],
+        "root_cause_guess": ""
+        }}
+
+        Incident Description:
+        \"\"\"{description}\"\"\"
+    """
     try:
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
@@ -100,52 +137,124 @@ Incident Description:
 # -------------------------------------------------
 # 🧠 REGEX FALLBACK
 # -------------------------------------------------
+
+
 def extract_signals_regex(description: str) -> dict:
     """
-    Fallback rule-based extraction
+    Advanced rule-based signal extraction fallback.
+    Extracts errors, functions, file paths, line numbers, and keywords.
     """
 
-    description_lower = description.lower()
+    if not description:
+        return {}
 
+    text = description
+    text_lower = description.lower()
+
+    # -------------------------------------------------
+    # ERROR DETECTION
+    # -------------------------------------------------
     error_patterns = {
-        'type_error': r'(TypeError|type error)',
-        'attribute_error': r'(AttributeError|attribute error)',
-        'reference_error': r'(ReferenceError|reference error)',
-        'syntax_error': r'(SyntaxError|syntax error)',
-        'import_error': r'(ImportError|ModuleNotFoundError)',
-        'key_error': r'(KeyError)',
-        'index_error': r'(IndexError)',
-        'undefined': r'(undefined|not defined)',
-        'null_pointer': r'(null|NoneType)',
-        'file_not_found': r'(FileNotFoundError|no such file)'
+        "type_error": r"\bTypeError\b",
+        "attribute_error": r"\bAttributeError\b",
+        "reference_error": r"\bReferenceError\b",
+        "syntax_error": r"\bSyntaxError\b",
+        "import_error": r"\b(ImportError|ModuleNotFoundError)\b",
+        "key_error": r"\bKeyError\b",
+        "index_error": r"\bIndexError\b",
+        "value_error": r"\bValueError\b",
+        "runtime_error": r"\bRuntimeError\b",
+        "memory_error": r"\bMemoryError\b",
+        "undefined": r"\b(undefined|not defined)\b",
+        "null_pointer": r"\b(NoneType|null pointer|null)\b",
+        "file_not_found": r"\b(FileNotFoundError|no such file)\b",
+        "permission_error": r"\bPermissionError\b",
+        "timeout_error": r"\bTimeoutError\b",
+        "connection_error": r"\b(ConnectionError|ECONNREFUSED|ECONNRESET)\b",
     }
 
     detected_errors = [
         key for key, pattern in error_patterns.items()
-        if re.search(pattern, description, re.IGNORECASE)
+        if re.search(pattern, text, re.IGNORECASE)
     ]
 
-    function_pattern = r'\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\('
-    functions = re.findall(function_pattern, description)
+    # -------------------------------------------------
+    # FUNCTION DETECTION
+    # -------------------------------------------------
+    function_pattern = r"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\("
 
-    file_pattern = r'([a-zA-Z0-9_\-./]*\.(?:js|ts|py|java|cpp|go|rb|php|cs))'
-    files = re.findall(file_pattern, description)
+    functions = re.findall(function_pattern, text)
 
-    line_pattern = r'(?:line\s+(\d+)|L(\d+))'
-    line_matches = re.findall(line_pattern, description_lower)
-    line_numbers = [int(num) for group in line_matches for num in group if num]
+    # remove common false positives
+    stop_funcs = {"if", "for", "while", "switch", "return", "catch"}
 
-    keywords = extract_semantic_keywords(description)
+    functions = [
+        f for f in functions
+        if f.lower() not in stop_funcs
+    ]
+
+    # -------------------------------------------------
+    # FILE PATH DETECTION
+    # -------------------------------------------------
+    file_pattern = r"([a-zA-Z0-9_\-./]*\.(?:py|js|ts|jsx|tsx|java|cpp|c|go|rb|php|cs|rs))"
+
+    files = re.findall(file_pattern, text)
+
+    # -------------------------------------------------
+    # STACK TRACE PARSING
+    # Example: File "app.py", line 42
+    # -------------------------------------------------
+    stack_pattern = r'File\s+"([^"]+)",\s+line\s+(\d+)'
+
+    stack_matches = re.findall(stack_pattern, text)
+
+    for f, _ in stack_matches:
+        files.append(f)
+
+    # -------------------------------------------------
+    # LINE NUMBER DETECTION
+    # -------------------------------------------------
+    line_pattern = r"(?:line\s+(\d+)|L(\d+)|:(\d+))"
+
+    line_matches = re.findall(line_pattern, text_lower)
+
+    line_numbers = [
+        int(num)
+        for group in line_matches
+        for num in group
+        if num
+    ]
+
+    # -------------------------------------------------
+    # KEYWORD EXTRACTION
+    # -------------------------------------------------
+    tech_keywords = [
+        "react", "node", "express", "mongodb", "sql", "redis",
+        "docker", "kubernetes", "aws", "gcp", "azure",
+        "openai", "groq", "langchain", "transformers",
+        "jwt", "oauth", "api", "database", "cache"
+    ]
+
+    keywords = [
+        kw for kw in tech_keywords
+        if kw in text_lower
+    ]
+
+    # -------------------------------------------------
+    # CLEANUP
+    # -------------------------------------------------
+    functions = list(dict.fromkeys(functions))[:10]
+    files = list(dict.fromkeys(files))[:10]
+    line_numbers = sorted(set(line_numbers))
 
     return {
         "error_types": detected_errors,
-        "functions": functions[:5],
-        "file_paths": files[:5],
-        "line_numbers": sorted(set(line_numbers)),
+        "functions": functions,
+        "file_paths": files,
+        "line_numbers": line_numbers,
         "keywords": keywords,
         "root_cause_guess": ""
     }
-
 
 # -------------------------------------------------
 # 🔁 HYBRID EXTRACTOR (MAIN FUNCTION)
@@ -158,6 +267,7 @@ def extract_signals(description: str, repo_files: list = None) -> dict:
 
     # 1️⃣ Try AI
     ai_result = extract_signals_with_groq(description)
+    print("ai result ", ai_result)
 
     if ai_result and "keywords" in ai_result:
 

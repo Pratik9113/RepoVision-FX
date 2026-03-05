@@ -145,26 +145,134 @@ def get_repo_files(sandbox_path: str) -> list:
 
     # Folders to ignore
     ignore_dirs = {
+        # Version control
         ".git",
+        ".svn",
+        ".hg",
+
+        # Node / JS
         "node_modules",
+        ".npm",
+        ".yarn",
+        ".pnpm-store",
+
+        # Python
         "__pycache__",
-        "dist",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".tox",
+        ".venv",
+        "venv",
+        "env",
+
+        # Java
+        "target",
+        ".gradle",
         "build",
+
+        # .NET
+        "bin",
+        "obj",
+        ".vs",
+
+        # Frontend frameworks
+        ".next",
+        ".nuxt",
+        ".svelte-kit",
+        ".angular",
+        ".expo",
+        ".cache",
+
+        # Build systems
+        "dist",
+        "out",
+        "release",
+        "debug",
+
+        # Dev tools
         ".idea",
         ".vscode",
-        ".next",
-        "coverage",
-        "target",
-        "bin",
-        "obj"
-    }
+        ".history",
 
-    # File extensions to ignore
+        # Testing
+        "coverage",
+        "test-results",
+
+        # Docker / infra
+        ".docker",
+        ".terraform",
+
+        # OS files
+        ".DS_Store",
+        "Thumbs.db",
+
+        # Misc
+        "logs",
+        "tmp",
+        "temp",
+    }
+    
+
     ignore_extensions = {
+        # Logs
         ".log",
+
+        # Lock files
         ".lock",
+
+        # Temp files
         ".tmp",
-        ".env"
+        ".temp",
+
+        # Environment
+        ".env",
+
+        # Compiled binaries
+        ".exe",
+        ".dll",
+        ".so",
+        ".dylib",
+        ".class",
+        ".jar",
+        ".war",
+
+        # Python compiled
+        ".pyc",
+        ".pyo",
+        ".pyd",
+
+        # Remove documentation will handle later ##EPITOME do it later
+        ".md",
+        ".rst",
+        ".markdown"
+
+        # Archives
+        ".zip",
+        ".tar",
+        ".gz",
+        ".rar",
+        ".7z",
+
+        # Database
+        ".sqlite",
+        ".db",
+
+        # Images / media (usually not useful for code analysis)
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".svg",
+        ".mp4",
+        ".mp3",
+
+        # Fonts
+        ".ttf",
+        ".woff",
+        ".woff2",
+
+        # Map / build artifacts
+        ".map",
     }
 
     for root, dirs, files in os.walk(sandbox):
