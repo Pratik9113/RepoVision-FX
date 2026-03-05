@@ -186,9 +186,12 @@ def search_files(signals: Dict[str, Any], sandbox_path: str) -> List[Dict[str, A
     sandbox = Path(sandbox_path)
 
     keywords = signals.get("keywords", [])
-    error_patterns = signals.get("error_patterns", [])
+    error_patterns = signals.get("error_types", [])
     service_names = signals.get("services", [])
     function_names = signals.get("functions", [])
+    file_paths = signals.get("file_paths", [])
+    root_cause_guess = signals.get("root_cause_guess", "Unknown")
+    line_numbers = signals.get("line_numbers", [])
 
     IGNORE_DIRS = {
         "node_modules", ".git", "__pycache__", "venv",
@@ -227,7 +230,10 @@ def search_files(signals: Dict[str, Any], sandbox_path: str) -> List[Dict[str, A
                 keywords,
                 error_patterns,
                 service_names,
-                function_names
+                function_names,
+                file_paths,
+                root_cause_guess,
+                line_numbers
             )
 
             # 2️⃣ Structural scanning            
@@ -298,13 +304,16 @@ def is_relevant_file(filename: str) -> bool:
     ext = "." + filename.split('.')[-1].lower()
     return ext in relevant_extensions
 
-
+## EPTIOME - USE THIS UNUSED PROPS 
 def search_file_content(
     file_path: Path,
     keywords: List[str],
     error_patterns: List[str],
     service_names: List[str],
-    function_names: List[str]
+    function_names: List[str],
+    file_paths: List[str],
+    root_cause_guess: str,
+    line_numbers: List[int]
 ) -> Dict[str, Any]:
     """
     Search a single file's content for matches with smart scoring

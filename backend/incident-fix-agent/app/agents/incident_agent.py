@@ -35,9 +35,8 @@ def get_groq_client():
 client = get_groq_client()
 
 
-# -------------------------------------------------
-# 🤖 AI SIGNAL EXTRACTION
-# -------------------------------------------------
+import json
+
 def extract_signals_with_groq(description: str) -> dict:
     """
     Uses Groq LLM to extract structured debugging signals.
@@ -48,62 +47,73 @@ def extract_signals_with_groq(description: str) -> dict:
         return {}
 
     prompt = f"""
-        You are an expert software debugging AI used in an autonomous incident response system.
+You are an expert software debugging AI used in an autonomous incident response system.
 
-        Your task is to analyze an incident description and extract structured debugging signals
-        that will help locate the root cause inside a source code repository.
+Your task is to analyze an incident description and extract structured debugging signals
+that will help locate the root cause inside a source code repository.
 
-        IMPORTANT RULES:
+IMPORTANT RULES:
 
-        1. Extract ONLY signals that appear or are strongly implied in the text.
-        2. Do NOT hallucinate functions, files, or errors.
-        3. If something is not present, return an empty list.
-        4. Return STRICT JSON only.
-        5. Do NOT include explanations or markdown.
-        6. The output MUST be valid JSON.
+1. Extract ONLY signals that appear or are strongly implied in the text.
+2. Do NOT hallucinate functions, files, or services.
+3. If something is not present, return an empty list.
+4. Return STRICT JSON only.
+5. Do NOT include explanations or markdown.
+6. The output MUST be valid JSON.
 
-        Extract the following fields:
+Extract the following fields:
 
-        error_types:
-        Programming or runtime errors such as:
-        TypeError, ReferenceError, NullPointerException, ImportError, SyntaxError, SegmentationFault.
+error_types:
+Programming/runtime errors such as:
+TypeError, ReferenceError, NullPointerException, ImportError, SyntaxError.
 
-        functions:
-        Function or method names mentioned in stack traces, logs, or descriptions.
+functions:
+Function or method names mentioned in stack traces or logs.
 
-        file_paths:
-        Any file paths or filenames mentioned (example: src/api/user.js, services/auth.py).
+services:
+Service, module, controller, repository, manager, or component names.
+Examples:
+AuthService, UserService, PaymentService, OrderController, EmailWorker.
 
-        line_numbers:
-        Line numbers mentioned in stack traces.
+file_paths:
+Any file paths or filenames mentioned.
+Examples:
+src/api/user.js
+services/auth.py
+controllers/orderController.ts
 
-        keywords:
-        Important debugging keywords including:
-        - library names
-        - framework names
-        - API names
-        - database names
-        - variable names
-        - config names
-        - error messages
+line_numbers:
+Line numbers from stack traces.
 
-        root_cause_guess:
-        A short 1 sentence guess about the probable cause of the incident.
+keywords:
+Important debugging keywords including:
+- library names
+- framework names
+- database names
+- API names
+- config names
+- variable names
+- error messages
 
-        Output Format (STRICT):
+root_cause_guess:
+A short one sentence guess about the probable cause.
 
-        {{
-        "error_types": [],
-        "functions": [],
-        "file_paths": [],
-        "line_numbers": [],
-        "keywords": [],
-        "root_cause_guess": ""
-        }}
+Output Format (STRICT):
 
-        Incident Description:
-        \"\"\"{description}\"\"\"
-    """
+{{
+"error_types": [],
+"functions": [],
+"services": [],
+"file_paths": [],
+"line_numbers": [],
+"keywords": [],
+"root_cause_guess": ""
+}}
+
+Incident Description:
+\"\"\"{description}\"\"\"
+"""
+
     try:
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
@@ -121,7 +131,7 @@ def extract_signals_with_groq(description: str) -> dict:
 
         content = response.choices[0].message.content.strip()
 
-        # Remove possible ```json blocks
+        # remove markdown blocks if present
         content = content.replace("```json", "").replace("```", "").strip()
 
         return json.loads(content)
@@ -129,15 +139,13 @@ def extract_signals_with_groq(description: str) -> dict:
     except json.JSONDecodeError as e:
         print(f"⚠️ JSON parsing failed: {e}")
         return {}
+
     except Exception as e:
         print(f"⚠️ Groq Extraction Failed: {type(e).__name__}: {e}")
         return {}
+    
 
-
-# -------------------------------------------------
-# 🧠 REGEX FALLBACK
-# -------------------------------------------------
-
+   
 
 def extract_signals_regex(description: str) -> dict:
     """

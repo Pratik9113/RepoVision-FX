@@ -127,12 +127,12 @@ def handle_incident(repo_url: str, description: str, slack_channel: str = None):
         signals = extract_signals(description, repo_files)
         
         print(f"  • Error Types: {signals.get('error_types', [])}")
+        print(f"  • Services: {signals.get('services', [])}")
         print(f"  • Functions: {signals.get('functions', [])}")
         print(f"  • File Paths: {signals.get('file_paths', [])}")
         print(f"  • Keywords: {signals.get('keywords', [])[:10]}")
         print(f"  • root_cause_guess : {signals.get('root_cause_guess', 'Unknown')}")
         print(f"  • line_numbers  : {signals.get('line_numbers', [])}")
-
 
 
 
