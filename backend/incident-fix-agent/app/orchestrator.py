@@ -15,6 +15,12 @@ from app.services.repository_manager import clone_or_update_repo, get_repo_files
 from app.agents.incident_agent import extract_signals
 from app.services.search_service import search_files, search_by_function_name
 from app.services.edit_planner import build_edit_plan, apply_edit_plan
+from app.services.semantic_rerank import semantic_rerank_files
+from app.services.code_graph import (
+    build_ast_index,
+    build_dependency_graph,
+    summarize_dependency_neighborhood,
+)
 from app.integration.github_pr_integration import GitHubPRCreator
 from app.integration.slack_service import get_slack_service
 from dotenv import load_dotenv
@@ -143,10 +149,15 @@ def handle_incident(repo_url: str, description: str, slack_channel: str = None):
         candidate_files = search_files(signals, sandbox_path)
         print(f"Found {len(candidate_files)} files with matching content")
 
-
-
-
-
+        # 4b: Semantic re-ranking with Groq (Codebase Embedding-style search)
+        if groq_client and candidate_files:
+            candidate_files = semantic_rerank_files(
+                groq_client=groq_client,
+                description=description,
+                signals=signals,
+                candidate_files=candidate_files,
+            )
+            print("Re-ranked candidate files with Groq semantic signal")
 
         # STEP 5: Search for specific functions
         function_matches = []
@@ -182,8 +193,17 @@ def handle_incident(repo_url: str, description: str, slack_channel: str = None):
         print(f"\n STEP 6: Performing Root Cause Analysis")
         if slack_channel:
             _send_slack_update(slack_channel, "6/8", "Running AI deep analysis for root cause…")
+
+        # Build lightweight AST + dependency graph for impact analysis
+        ast_index = build_ast_index(sandbox_path)
+        dep_graph = build_dependency_graph(ast_index)
+        top_files = [cf["file"] for cf in candidate_files[:3]] if candidate_files else []
+        dep_summary = summarize_dependency_neighborhood(top_files, dep_graph)
+
         llm_context = prepare_llm_context(candidate_files, function_matches, description)
-        
+        llm_context["dependency_impact"] = dep_summary
+        llm_context["ast_index_present"] = bool(ast_index.get("files"))
+
         if groq_client:
             root_cause_analysis = analyze_root_cause_with_groq(
                 candidate_files,
@@ -381,7 +401,10 @@ def analyze_root_cause_with_groq(candidate_files: list, function_matches: list, 
         ])
         for cf in candidate_files[:5]
     ])
-    
+
+    # Optional dependency impact summary from AST/graph
+    dep_impact = llm_context.get("dependency_impact") if isinstance(llm_context, dict) else None
+    dep_impact_text = json.dumps(dep_impact, indent=2) if dep_impact else "None"
     prompt = f"""
                 You are a senior software engineer analyzing a critical incident.
 
@@ -400,6 +423,9 @@ def analyze_root_cause_with_groq(candidate_files: list, function_matches: list, 
 
                 FUNCTIONS FOUND:
                 {json.dumps(function_matches[:5], indent=2)}
+
+                DEPENDENCY IMPACT (from AST/graph analysis):
+                {dep_impact_text}
 
                 TASK - Provide comprehensive root cause analysis:
                 1. What is the most likely root cause?
