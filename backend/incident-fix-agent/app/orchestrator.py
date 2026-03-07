@@ -28,6 +28,7 @@ from groq import Groq
 import os
 import json
 import threading
+from typing import Optional, List, Dict, Any
 
 # Global state to prevent concurrent runs on the same repo
 _active_repos = set()
@@ -54,14 +55,26 @@ def get_groq_client():
 groq_client = get_groq_client()
 
 
-def _send_slack_update(slack_channel: str, step: str, message: str):
+def extract_github_repo(repo_url: str) -> Optional[str]:
+    """
+    Extract 'owner/repo' from various GitHub URL formats.
+    Returns None if not a GitHub URL.
+    """
+    if not repo_url or "github.com" not in repo_url:
+        return None
+    
+    # Remove .git suffix if present
+    clean_url = repo_url.replace(".git", "")
+    
+    # Standard format: https://github.com/owner/repo
     try:
-        slack = get_slack_service()
-        if slack:
-            slack.send_incident_update(slack_channel, step, message)
+        parts = clean_url.split("github.com/")[-1].split("/")
+        if len(parts) >= 2:
+            return f"{parts[0]}/{parts[1]}"
     except Exception:
-        # Never fail the pipeline due to Slack
         pass
+        
+    return None
 
 
 def handle_incident(repo_url: str, description: str, slack_channel: str = None):
@@ -259,11 +272,14 @@ def handle_incident(repo_url: str, description: str, slack_channel: str = None):
         if slack_channel:
             _send_slack_update(slack_channel, "8/8", "Finalizing and pushing changes to GitHub…")
 
-        if edited_files and GITHUB_REPO and GITHUB_TOKEN:
+        # Determine target repo for PR
+        target_repo = extract_github_repo(repo_url) or GITHUB_REPO
+        
+        if edited_files and target_repo and GITHUB_TOKEN:
             try:
-                print(f"Repo: {GITHUB_REPO}")
+                print(f"TARGET REPO FOR PR: {target_repo}")
                 print(f"Files to commit: {len(edited_files)}")
-                pr_creator = GitHubPRCreator(GITHUB_TOKEN, GITHUB_REPO)
+                pr_creator = GitHubPRCreator(GITHUB_TOKEN, target_repo)
 
                 github_result = pr_creator.create_branch_and_pr(
                     sandbox_path=sandbox_path,

@@ -44,6 +44,16 @@ def clone_or_update_repo(repo_url: str) -> dict:
         }
     """
     try:
+        # Check if repo_url is a local directory (Hackathon mode)
+        local_path = Path(repo_url)
+        if local_path.is_absolute() and local_path.exists() and local_path.is_dir():
+            print(f"Using local directory (Hackathon Mode): {repo_url}")
+            return {
+                "status": "local",
+                "sandbox_path": str(local_path.absolute()),
+                "message": f"Using local directory at {repo_url}"
+            }
+
         # Ensure sandbox exists
         SANDBOX_BASE_PATH.mkdir(parents=True, exist_ok=True)
         

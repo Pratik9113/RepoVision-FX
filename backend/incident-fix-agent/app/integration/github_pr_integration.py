@@ -49,10 +49,18 @@ class GitHubPRCreator:
             )
             
             # 5️⃣ Pull latest changes
-            subprocess.run(
-                ["git", "pull", "origin", base_branch],
-                cwd=sandbox_path, check=True
-            )
+            print(f"🔄 Pulling latest from origin/{base_branch}...")
+            try:
+                subprocess.run(
+                    ["git", "pull", "origin", base_branch, "--allow-unrelated-histories"],
+                    cwd=sandbox_path, 
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"⚠️ Git pull notice: {e.stderr.strip()}")
+                # If pull fails, we still try to proceed with what we have
 
             # 6️⃣ Create new local branch
             subprocess.run(
