@@ -55,6 +55,19 @@ def get_groq_client():
 groq_client = get_groq_client()
 
 
+
+
+def _send_slack_update(slack_channel: str, step: str, message: str):
+    try:
+        slack = get_slack_service()
+        if slack:
+            slack.send_incident_update(slack_channel, step, message)
+    except Exception:
+        # Never fail the pipeline due to Slack
+        pass
+
+
+
 def extract_github_repo(repo_url: str) -> Optional[str]:
     """
     Extract 'owner/repo' from various GitHub URL formats.
