@@ -257,20 +257,32 @@ def apply_edit_plan(
     signals: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
     """
-    Execute the edit plan using the provided Groq client.
-    Only high-confidence files in plan['selected_files'] are edited.
+    Execute the edit plan using LLM.
+    Only edits files selected by planner.
     """
+
     selected = plan.get("selected_files") or []
     if not groq_client or not selected:
         return []
 
     edited_list: List[Dict[str, Any]] = []
+
     root_cause = root_cause_analysis.get("root_cause") or "Unknown"
     recommended = root_cause_analysis.get("recommended_fixes") or []
+
+    error_types = signals.get("error_types") or []
+    keywords = signals.get("keywords") or []
+    line_numbers = signals.get("line_numbers") or []
+    incident_functions = signals.get("functions") or []
+
+    error_types_str = ", ".join(error_types) if error_types else "Unknown"
+    keywords_str = ", ".join(keywords) if keywords else "None"
+    functions_str = ", ".join(incident_functions) if incident_functions else "None"
+
     recommended_text = (
         "\n".join(
             [
-                f"- {r.get('action', r.get('description', ''))} (file: {r.get('file', '')})"
+                f"- {r.get('action', r.get('description', ''))}"
                 for r in recommended[:5]
                 if isinstance(r, dict)
             ]
@@ -280,8 +292,6 @@ def apply_edit_plan(
     )
 
     base_path = Path(sandbox_path)
-    incident_functions = signals.get("functions") or []
-    functions_str = ", ".join(incident_functions) if incident_functions else "None"
 
     for item in selected:
         rel_path = item.get("file")
@@ -289,63 +299,112 @@ def apply_edit_plan(
             continue
 
         full_path = base_path / rel_path
-        content = _read_file_content(full_path)
-        if not content or len(content.splitlines()) > 1200: 
+
+        if not full_path.exists():
             continue
+
+        content = _read_file_content(full_path)
+
+        if not content:
+            continue
+
+        # Skip huge files
+        if len(content.splitlines()) > 1200:
+            continue
+
+        lines = content.splitlines()
+
+        # Build bug context window
+        context_block = ""
+        if line_numbers:
+            for ln in line_numbers:
+                start = max(0, ln - 5)
+                end = min(len(lines), ln + 5)
+                snippet = "\n".join(lines[start:end])
+
+                context_block += f"\n--- Code around line {ln} ---\n{snippet}\n"
 
         focus_lines = item.get("focus_lines") or []
         focus_str = ", ".join(f"L{n}" for n in focus_lines) if focus_lines else "None"
 
-        prompt = f"""You are a senior engineer applying a precise fix for an incident.
+        prompt = f"""
+You are a senior backend engineer fixing a production incident.
 
-INCIDENT:
+INCIDENT DESCRIPTION:
 {description[:2000]}
 
-ROOT CAUSE (from prior analysis):
+ROOT CAUSE (analysis):
 {root_cause}
+
+ERROR TYPE:
+{error_types_str}
+
+ERROR DETAILS:
+{keywords_str}
 
 RECOMMENDED FIXES:
 {recommended_text}
 
-FILE TO FIX (path: {rel_path}):
-``` 
-{content}
-```
+FILE PATH:
+{rel_path}
 
-Important context:
-- The most suspicious lines are: {focus_str}
-- Incident mentioned these functions: {functions_str}
-- If you see an obvious typo in a function name or its usage that causes a reference/undefined error (for example `embdTexts` vs `embedTexts`), fix the name consistently in this file.
-- Make the SMALLEST possible change that fully fixes the issue.
-- Avoid renaming public APIs unless it clearly resolves a reference error described in the incident.
-- Preserve formatting and any unrelated logic.
+FULL FILE CONTENT:
+
+{content}
+
+
+RELEVANT BUG CONTEXT:
+{context_block}
+
+Important hints:
+- Most suspicious lines: {focus_str}
+- Incident mentioned functions: {functions_str}
+- If there is a bytes vs string mismatch, fix encoding/decoding.
+- If a function name typo exists, correct it consistently.
+
+RULES:
+- Fix ONLY the lines causing the error.
+- Do NOT rewrite the whole file.
+- Do NOT modify unrelated logic.
+- Preserve formatting.
 
 TASK:
-Return ONLY the FULL corrected file content inside a single code block. No explanation, no comments about the change.
+Return ONLY the FULL corrected file inside ONE code block.
+No explanation.
 """
 
         try:
             response = groq_client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model="llama-3.3-70b-versatile",
                 messages=[
                     {
                         "role": "system",
-                        "content": "You output only the corrected file content inside one code block. No other text.",
+                        "content": "Return ONLY the corrected file inside a code block.",
                     },
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.2,
                 timeout=60,
             )
+
             if not response or not response.choices:
                 continue
 
             raw = response.choices[0].message.content.strip()
+
             edited_content = _extract_code_block(raw)
 
-            if len(edited_content) > len(content) * 1.8:
-                continue
             if not edited_content:
+                continue
+
+            # Skip if identical
+            if edited_content.strip() == content.strip():
+                print(f"⚠️ Model returned identical file for {rel_path}")
+                continue
+
+            # Prevent huge hallucinated output
+            if len(edited_content) > len(content) * 1.8:
+                print(f"⚠️ Skipping suspiciously large edit for {rel_path}")
                 continue
 
             affected_lines = _get_affected_lines(content, edited_content)
@@ -359,9 +418,9 @@ Return ONLY the FULL corrected file content inside a single code block. No expla
                     "change_summary": root_cause[:300],
                 }
             )
+
         except Exception as e:
             print(f"⚠️ Edit generation failed for {rel_path}: {e}")
             continue
 
     return edited_list
-
