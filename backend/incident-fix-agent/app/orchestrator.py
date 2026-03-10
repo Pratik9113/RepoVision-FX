@@ -157,6 +157,7 @@ def handle_incident(repo_url: str, description: str, slack_channel: str = None):
         if slack_channel:
             _send_slack_update(slack_channel, "3/8", "Extracting debugging signals from description…")
         signals = extract_signals(description, repo_files)
+
         
         print(f"  • Error Types: {signals.get('error_types', [])}")
         print(f"  • Services: {signals.get('services', [])}")
@@ -256,7 +257,8 @@ def handle_incident(repo_url: str, description: str, slack_channel: str = None):
         if candidate_files and groq_client:
             if slack_channel:
                 _send_slack_update(slack_channel, "7/8", "Generating targeted code fixes…")
-            edit_plan = build_edit_plan(signals, candidate_files, function_matches)
+            llm_context_root_cause_analysis = llm_context.get("root_cause_analysis") or {}
+            edit_plan = build_edit_plan(signals, candidate_files, function_matches, llm_context_root_cause_analysis)
             selected = edit_plan.get("selected_files") or []
 
             if selected:
