@@ -39,8 +39,8 @@ app.add_middleware(
 )
 
 # Paths
-BASE_PATH = Path(r"d:\SYRUS_REPOVISIONAI-FX")
-INCIDENTS_DIR = Path(r"d:\SYRUS_REPOVISIONAI-FX\backend\incidents")
+BASE_PATH = Path(r"d:\RepoVision-FX")
+INCIDENTS_DIR = Path(r"d:\RepoVision-FX\backend\incidents")
 
 # OAuth2 setup
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -237,6 +237,22 @@ async def health_check():
         "service": "Hackathon Incident Fix Agent",
         "database": "connected" if db_status else "disconnected"
     }
+
+from fastapi.responses import RedirectResponse
+
+@app.get("/")
+async def root():
+    """Redirect to frontend dashboard or show status"""
+    return {
+        "message": "RepoVisionAI-FX Backend is running.",
+        "dashboard_url": "http://localhost:5173",
+        "status": "ready"
+    }
+
+@app.get("/agent")
+async def agent_redirect():
+    """Support accidental backend access to the agent UI path"""
+    return RedirectResponse(url="http://localhost:5173/agent")
 
 if __name__ == "__main__":
     import uvicorn
