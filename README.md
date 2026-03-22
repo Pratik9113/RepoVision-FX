@@ -26,7 +26,7 @@ Our system currently targets and supports seamless operations across modern tech
 ## 📂 Project Structure
 
 ```text
-d:\SYRUS_REPOVISIONAI-FX\
+d:\REPOVISIONAI-FX\
 ├── backend/            # Main server, orchestrator, and AST/Graph logic
 ├── repovision/         # Core application frontend & tools
 └── README.md           # This file
