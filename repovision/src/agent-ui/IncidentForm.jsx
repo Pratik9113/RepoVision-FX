@@ -101,7 +101,7 @@ function EditedFileCard({ edit }) {
 }
 
 export default function IncidentForm({ prefilledIncidentId }) {
-    const [repoUrl, setRepoUrl] = useState('d:\\SYRUS_REPOVISIONAI-FX');
+    const [repoUrl, setRepoUrl] = useState('d:\\SREPOVISIONAI-FX');
     const [description, setDescription] = useState('');
     const [optionalData, setOptionalData] = useState({});
     const [isLoading, setIsLoading] = useState(false);
