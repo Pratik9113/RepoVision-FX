@@ -1,8 +1,4 @@
 # Autonomous Incident-to-Fix Engineering Agent
-
-**Team Name:** RepoVisionAI-FX  
-**Problem Statement (PS) Title:** Autonomous Incident-to-Fix Engineering Agent  
-
 ---
 
 ## 🚀 Overview
@@ -84,4 +80,3 @@ Our platform acts as its own autonomous contributor! Once an issue is opened or 
 3. Formulates and verifies the fix locally in a sandbox.
 4. Generates a new branch, pushes the code, and creates a descriptive GitHub Pull Request.
 
-Human engineers are simply required to review the explainable summary and approve the PR.
