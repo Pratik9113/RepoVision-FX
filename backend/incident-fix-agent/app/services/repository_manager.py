@@ -315,3 +315,15 @@ def cleanup_sandbox(sandbox_path: str) -> bool:
     except Exception as e:
         print(f"Error cleaning up: {e}")
         return False
+
+
+def delete_cloned_repos_folder() -> bool:
+    """Delete the entire cloned_repos folder"""
+    try:
+        if SANDBOX_BASE_PATH.exists():
+            shutil.rmtree(SANDBOX_BASE_PATH)
+            print(f"Successfully deleted {SANDBOX_BASE_PATH}")
+        return True
+    except Exception as e:
+        print(f"Error deleting cloned_repos folder: {e}")
+        return False

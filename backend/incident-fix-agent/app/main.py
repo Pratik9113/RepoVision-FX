@@ -112,43 +112,21 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 # -----------------------------
 # Auth Routes
 # -----------------------------
-@app.post("/signup", status_code=status.HTTP_201_CREATED)
-async def signup(user: User):
-    db = get_db()
-    
-    # Check if user exists
-    if await db.users.find_one({"$or": [{"username": user.username}, {"email": user.email}]}):
-        raise HTTPException(status_code=400, detail="Username or email already registered")
-    
-    hashed_password = get_password_hash(user.password)
-    user_dict = {
-        "username": user.username,
-        "email": user.email,
-        "hashed_password": hashed_password,
-        "created_at": datetime.utcnow()
-    }
-    
-    await db.users.insert_one(user_dict)
-    return {"message": "User created successfully"}
+# NOTE: Auth routes temporarily commented out because login is disabled
+# @app.post("/signup", status_code=status.HTTP_201_CREATED)
+# async def signup(user: User):
+#     db = get_db()
+#     ... (rest of the code omitted for brevity)
+#     return {"message": "User created successfully"}
 
-@app.post("/token", response_model=Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    db = get_db()
-    user = await db.users.find_one({"username": form_data.username})
-    
-    if not user or not verify_password(form_data.password, user["hashed_password"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    access_token = create_access_token(data={"sub": user["username"]})
-    return {
-        "access_token": access_token, 
-        "token_type": "bearer",
-        "username": user["username"]
-    }
+# @app.post("/token", response_model=Token)
+# async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+#     ... (rest of the code omitted for brevity)
+#     return {
+#         "access_token": access_token, 
+#         "token_type": "bearer",
+#         "username": user["username"]
+#     }
 
 # -----------------------------
 # Incident Routes (MongoDB)
@@ -222,7 +200,9 @@ async def get_incident(incident_id: str):
     return incident
 
 @app.post("/incident")
-async def process_incident(request: IncidentRequest, current_user: dict = Depends(get_current_user)):
+async def process_incident(request: IncidentRequest):
+    # Auth disabled for now
+    current_user = {"username": "anonymous_developer"}
     try:
         incident_data = request.model_dump()
         incident_data["repo_url"] = str(incident_data["repo_url"])

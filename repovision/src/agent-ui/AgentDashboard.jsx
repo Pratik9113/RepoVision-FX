@@ -44,7 +44,7 @@ export default function AgentDashboard() {
 
     const handleLogout = () => {
         logout();
-        navigate('/login');
+        navigate('/');
     };
 
     const sidebarItems = [

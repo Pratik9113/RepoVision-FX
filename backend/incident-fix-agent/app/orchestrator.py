@@ -11,7 +11,7 @@ Coordinates entire incident resolution pipeline.
     # STEP 8: Create GitHub PR
 """
 
-from app.services.repository_manager import clone_or_update_repo, get_repo_files
+from app.services.repository_manager import clone_or_update_repo, get_repo_files, delete_cloned_repos_folder
 from app.agents.incident_agent import extract_signals
 from app.services.search_service import search_files, search_by_function_name, search_file_content
 from app.services.edit_planner import build_edit_plan, apply_edit_plan
@@ -113,6 +113,8 @@ def handle_incident(
     Returns:
         Structured analysis with exact file locations and line numbers
     """
+    
+    sandbox_path = None
     
     # CONCURRENCY GUARD: Check if this repo is already being processed
     with _repo_lock:
@@ -522,6 +524,16 @@ def handle_incident(
         with _repo_lock:
             if repo_url in _active_repos:
                 _active_repos.remove(repo_url)
+            
+            # If no other processing is active, wipe the whole folder as requested
+            if not _active_repos:
+                print("\n🧹 Cleaning up: Deleting entire cloned_repos folder...")
+                delete_cloned_repos_folder()
+            elif sandbox_path:
+                # If others are running, only delete this specific repo's folder
+                print(f"\n🧹 Selective cleanup: Deleting {sandbox_path} (other tasks active)")
+                from app.services.repository_manager import cleanup_sandbox
+                cleanup_sandbox(sandbox_path)
 
 def analyze_functions_with_groq(function_matches: list, signals: dict, description: str) -> dict:
     """

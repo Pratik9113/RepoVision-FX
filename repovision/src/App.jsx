@@ -14,10 +14,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<HomePage />}></Route>
       <Route path="/3d" element={<ThreeDGraphPage />}></Route>
-      <Route path="/agent" element={<ProtectedRoute><AgentDashboard /></ProtectedRoute>}></Route>
-      <Route path="/incidents" element={<ProtectedRoute><IncidentsDashboard /></ProtectedRoute>}></Route>
-      <Route path="/login" element={<LoginPage />}></Route>
-      <Route path="/signup" element={<SignupPage />}></Route>
+      <Route path="/agent" element={<AgentDashboard />}></Route>
+      <Route path="/incidents" element={<IncidentsDashboard />}></Route>
     </Routes>
   )
 }

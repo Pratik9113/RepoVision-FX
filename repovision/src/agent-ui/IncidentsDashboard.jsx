@@ -33,7 +33,7 @@ export default function IncidentsDashboard() {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate('/');
   };
 
   return (

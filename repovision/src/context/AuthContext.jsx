@@ -3,17 +3,14 @@ import { createContext, useContext, useState, useEffect } from 'react';
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
-    const [token, setToken] = useState(localStorage.getItem('token'));
-    const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState({ username: 'Guest Agent' });
+    const [token, setToken] = useState('demo-token');
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        const storedUser = localStorage.getItem('username');
-        if (token && storedUser) {
-            setUser({ username: storedUser });
-        }
-        setLoading(false);
-    }, [token]);
+        // Auth bypass enabled
+        console.log("Auth bypass active");
+    }, []);
 
     const login = async (username, password) => {
         const formData = new FormData();
