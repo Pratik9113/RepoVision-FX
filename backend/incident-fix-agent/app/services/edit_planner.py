@@ -143,7 +143,7 @@ def build_edit_plan(
         for c in critical:
             f = c.get("file")
             if f:
-                llm_files.add(f.lower())
+                llm_files.add(str(Path(f).as_posix()).lower())
 
     annotated: List[Dict[str, Any]] = []
 
@@ -151,7 +151,6 @@ def build_edit_plan(
 
         file_path = str(Path(cf.get("file", "")).as_posix()).lower()
         conf = _compute_file_confidence(cf, signals, function_matches)
-        llm_files.add(str(Path(f).as_posix()).lower())
 
         # Boost confidence if LLM root cause mentions this file
         if file_path in llm_files:
@@ -294,71 +293,77 @@ def apply_edit_plan(
     base_path = Path(sandbox_path)
 
     for item in selected:
-        rel_path = item.get("file")
-        if not rel_path:
-            continue
+        try:
+            rel_path = item.get("file")
+            if not rel_path:
+                continue
 
-        full_path = base_path / rel_path
+            full_path = base_path / rel_path
 
-        if not full_path.exists():
-            continue
+            if not full_path.exists():
+                continue
 
-        content = _read_file_content(full_path)
+            content = _read_file_content(full_path)
 
-        if not content:
-            continue
+            if not content:
+                continue
 
-        # Skip huge files
-        if len(content.splitlines()) > 1200:
-            continue
+            # Skip huge files
+            if len(content.splitlines()) > 1200:
+                continue
 
-        lines = content.splitlines()
+            lines = content.splitlines()
 
-        # Build bug context window
-        context_block = ""
-        if line_numbers:
-            for ln in line_numbers:
-                start = max(0, ln - 5)
-                end = min(len(lines), ln + 5)
-                snippet = "\n".join(lines[start:end])
+            # Build bug context window
+            context_block = ""
+            if line_numbers:
+                for ln in line_numbers:
+                    try:
+                        # Ensure ln is an int
+                        curr_ln = int(ln)
+                        start = max(0, curr_ln - 5)
+                        end = min(len(lines), curr_ln + 5)
+                        snippet = "\n".join(lines[start:end])
+                        context_block += f"\n--- Code around line {curr_ln} ---\n{snippet}\n"
+                    except (ValueError, TypeError):
+                        continue
 
-                context_block += f"\n--- Code around line {ln} ---\n{snippet}\n"
+            focus_lines = item.get("focus_lines") or []
+            focus_str = ", ".join(f"L{n}" for n in focus_lines) if focus_lines else "None"
 
-        focus_lines = item.get("focus_lines") or []
-        focus_str = ", ".join(f"L{n}" for n in focus_lines) if focus_lines else "None"
-
-        prompt = f"""
+            # Use a safer way to build the prompt to avoid f-string errors with code braces
+            prompt_template = """
 You are a senior backend engineer fixing a production incident.
 
 INCIDENT DESCRIPTION:
-{description[:2000]}
+{{DESCRIPTION}}
 
 ROOT CAUSE (analysis):
-{root_cause}
+{{ROOT_CAUSE}}
 
 ERROR TYPE:
-{error_types_str}
+{{ERROR_TYPES}}
 
 ERROR DETAILS:
-{keywords_str}
+{{KEYWORDS}}
 
 RECOMMENDED FIXES:
-{recommended_text}
+{{RECOMMENDED}}
 
 FILE PATH:
-{rel_path}
+{{FILE_PATH}}
 
 FULL FILE CONTENT:
 
-{content}
+{{CONTENT}}
 
 
 RELEVANT BUG CONTEXT:
-{context_block}
+{{CONTEXT}}
 
 Important hints:
-- Most suspicious lines: {focus_str}
-- Incident mentioned functions: {functions_str}
+- Most suspicious lines: {{FOCUS}}
+- Incident mentioned functions: {{FUNCTIONS}}
 - If there is a bytes vs string mismatch, fix encoding/decoding.
 - If a function name typo exists, correct it consistently.
 
@@ -372,8 +377,17 @@ TASK:
 Return ONLY the FULL corrected file inside ONE code block.
 No explanation.
 """
+            prompt = prompt_template.replace("{{DESCRIPTION}}", str(description[:2000]))
+            prompt = prompt.replace("{{ROOT_CAUSE}}", str(root_cause))
+            prompt = prompt.replace("{{ERROR_TYPES}}", str(error_types_str))
+            prompt = prompt.replace("{{KEYWORDS}}", str(keywords_str))
+            prompt = prompt.replace("{{RECOMMENDED}}", str(recommended_text))
+            prompt = prompt.replace("{{FILE_PATH}}", str(rel_path))
+            prompt = prompt.replace("{{CONTENT}}", str(content))
+            prompt = prompt.replace("{{CONTEXT}}", str(context_block))
+            prompt = prompt.replace("{{FOCUS}}", str(focus_str))
+            prompt = prompt.replace("{{FUNCTIONS}}", str(functions_str))
 
-        try:
             response = groq_client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[
@@ -383,7 +397,7 @@ No explanation.
                     },
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.2,
+                temperature=0.1,
                 timeout=60,
             )
 
@@ -415,12 +429,14 @@ No explanation.
                     "original_content": content,
                     "edited_content": edited_content,
                     "affected_lines": affected_lines,
-                    "change_summary": root_cause[:300],
+                    "change_summary": str(root_cause)[:300],
                 }
             )
 
         except Exception as e:
-            print(f"⚠️ Edit generation failed for {rel_path}: {e}")
+            print(f"⚠️ Edit generation failed for {rel_path if 'rel_path' in locals() else 'unknown'}: {e}")
+            import traceback
+            traceback.print_exc()
             continue
 
     return edited_list

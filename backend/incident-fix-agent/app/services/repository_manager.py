@@ -291,10 +291,11 @@ def get_repo_files(sandbox_path: str) -> list:
         dirs[:] = [d for d in dirs if d not in ignore_dirs and not d.startswith(".")]
 
         for file in files:
-            if file.startswith("."):
+            # Explicitly allow .env and .env.example
+            if file.startswith(".") and file not in [".env", ".env.example"]:
                 continue
 
-            if Path(file).suffix in ignore_extensions:
+            if Path(file).suffix in ignore_extensions and file not in [".env", ".env.example"]:
                 continue
 
             full_path = Path(root) / file

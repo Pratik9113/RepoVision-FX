@@ -31,84 +31,60 @@ def get_groq_client():
 client = get_groq_client()
 
 
-import json
 
-def extract_signals_with_groq(description: str) -> dict:
+
+def extract_signals_with_groq(context: dict) -> dict:
     """
     Uses Groq LLM to extract structured debugging signals.
+    Accepts full incident context (description + optional fields).
     Returns {} if API fails.
     """
 
     if not client:
         return {}
 
+    description = context.get("description", "")
+    error_log = context.get("error_log", "")
+    recent_changes = context.get("recent_changes", "")
+    steps = context.get("steps_to_reproduce", [])
+
     prompt = f"""
-                You are an expert software debugging AI used in an autonomous incident response system.
+You are an expert software debugging AI used in an autonomous incident response system.
 
-                Your task is to analyze an incident description and extract structured debugging signals
-                that will help locate the root cause inside a source code repository.
+Your task is to analyze an incident description and extract structured debugging signals
+that help locate the root cause inside a source code repository.
 
-                IMPORTANT RULES:
+IMPORTANT RULES:
+1. Extract ONLY signals present or strongly implied in the text.
+2. DO NOT hallucinate files, functions, or services.
+3. If a field is missing, return an empty list.
+4. Output STRICT valid JSON only.
+5. No explanations, no markdown.
 
-                1. Extract ONLY signals that appear or are strongly implied in the text.
-                2. Do NOT hallucinate functions, files, or services.
-                3. If something is not present, return an empty list.
-                4. Return STRICT JSON only.
-                5. Do NOT include explanations or markdown.
-                6. The output MUST be valid JSON.
+Return JSON with the following schema:
 
-                Extract the following fields:
+{{
+  "error_types": [],
+  "functions": [],
+  "services": [],
+  "file_paths": [],
+  "line_numbers": [],
+  "keywords": [],
+  "root_cause_guess": ""
+}}
 
-                error_types:
-                Programming/runtime errors such as:
-                TypeError, ReferenceError, NullPointerException, ImportError, SyntaxError.
+Incident Description:
+\"\"\"{description}\"\"\"
 
-                functions:
-                Function or method names mentioned in stack traces or logs.
+Error Log:
+\"\"\"{error_log}\"\"\"
 
-                services:
-                Service, module, controller, repository, manager, or component names.
-                Examples:
-                AuthService, UserService, PaymentService, OrderController, EmailWorker.
+Recent Changes:
+\"\"\"{recent_changes}\"\"\"
 
-                file_paths:
-                Any file paths or filenames mentioned.
-                Examples:
-                src/api/user.js
-                services/auth.py
-                controllers/orderController.ts
-
-                line_numbers:
-                Line numbers from stack traces.
-
-                keywords:
-                Important debugging keywords including:
-                - library names
-                - framework names
-                - database names
-                - API names
-                - config names
-                - variable names
-                - error messages
-
-                root_cause_guess:
-                A short one sentence guess about the probable cause.
-
-                Output Format (STRICT):
-
-                {{
-                "error_types": [],
-                "functions": [],
-                "services": [],
-                "file_paths": [],
-                "line_numbers": [],
-                "keywords": [],
-                "root_cause_guess": ""
-                }}
-
-                Incident Description:
-                \"\"\"{description}\"\"\"
-            """
+Steps To Reproduce:
+\"\"\"{steps}\"\"\"
+"""
 
     try:
         response = client.chat.completions.create(
@@ -117,7 +93,8 @@ def extract_signals_with_groq(description: str) -> dict:
                 {"role": "system", "content": "You extract structured debugging signals."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.2,
+            temperature=0.1,
+            max_tokens=800,
             timeout=30
         )
 
@@ -126,9 +103,27 @@ def extract_signals_with_groq(description: str) -> dict:
             return {}
 
         content = response.choices[0].message.content.strip()
+
+        # Clean possible markdown
         content = content.replace("```json", "").replace("```", "").strip()
 
-        return json.loads(content)
+        parsed = json.loads(content)
+
+        # Ensure required keys exist
+        default_schema = {
+            "error_types": [],
+            "functions": [],
+            "services": [],
+            "file_paths": [],
+            "line_numbers": [],
+            "keywords": [],
+            "root_cause_guess": ""
+        }
+
+        for key in default_schema:
+            parsed.setdefault(key, default_schema[key])
+
+        return parsed
 
     except json.JSONDecodeError as e:
         print(f"JSON parsing failed: {e}")
@@ -137,14 +132,12 @@ def extract_signals_with_groq(description: str) -> dict:
     except Exception as e:
         print(f"Groq Extraction Failed: {type(e).__name__}: {e}")
         return {}
-    
-
    
 
 def extract_signals_regex(description: str) -> dict:
     """
     Advanced rule-based signal extraction fallback.
-    Extracts errors, functions, file paths, line numbers, and keywords.
+    Extracts errors, functions, file paths, line numbers, services and keywords.
     """
 
     if not description:
@@ -152,42 +145,59 @@ def extract_signals_regex(description: str) -> dict:
 
     text = description
     text_lower = description.lower()
+
+    # -------------------------------
+    # ERROR DETECTION
+    # -------------------------------
+
     error_patterns = {
-        "type_error": r"\bTypeError\b",
-        "attribute_error": r"\bAttributeError\b",
-        "reference_error": r"\bReferenceError\b",
-        "syntax_error": r"\bSyntaxError\b",
-        "import_error": r"\b(ImportError|ModuleNotFoundError)\b",
-        "key_error": r"\bKeyError\b",
-        "index_error": r"\bIndexError\b",
-        "value_error": r"\bValueError\b",
-        "runtime_error": r"\bRuntimeError\b",
-        "memory_error": r"\bMemoryError\b",
-        "undefined": r"\b(undefined|not defined)\b",
-        "null_pointer": r"\b(NoneType|null pointer|null)\b",
-        "file_not_found": r"\b(FileNotFoundError|no such file)\b",
-        "permission_error": r"\bPermissionError\b",
-        "timeout_error": r"\bTimeoutError\b",
-        "connection_error": r"\b(ConnectionError|ECONNREFUSED|ECONNRESET)\b",
+        "TypeError": r"\bTypeError\b",
+        "AttributeError": r"\bAttributeError\b",
+        "ReferenceError": r"\bReferenceError\b",
+        "SyntaxError": r"\bSyntaxError\b",
+        "ImportError": r"\b(ImportError|ModuleNotFoundError)\b",
+        "KeyError": r"\bKeyError\b",
+        "IndexError": r"\bIndexError\b",
+        "ValueError": r"\bValueError\b",
+        "RuntimeError": r"\bRuntimeError\b",
+        "MemoryError": r"\bMemoryError\b",
+        "FileNotFoundError": r"\b(FileNotFoundError|no such file)\b",
+        "PermissionError": r"\bPermissionError\b",
+        "TimeoutError": r"\bTimeoutError\b",
+        "ConnectionError": r"\b(ConnectionError|ECONNREFUSED|ECONNRESET)\b",
     }
 
     detected_errors = [
-        key for key, pattern in error_patterns.items()
+        err for err, pattern in error_patterns.items()
         if re.search(pattern, text, re.IGNORECASE)
     ]
+
+    # -------------------------------
+    # FUNCTION DETECTION
+    # -------------------------------
 
     function_pattern = r"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\("
 
     functions = re.findall(function_pattern, text)
+
     stop_funcs = {"if", "for", "while", "switch", "return", "catch"}
 
     functions = [
         f for f in functions
         if f.lower() not in stop_funcs
     ]
+
+    # -------------------------------
+    # FILE PATH DETECTION
+    # -------------------------------
+
     file_pattern = r"([a-zA-Z0-9_\-./]*\.(?:py|js|ts|jsx|tsx|java|cpp|c|go|rb|php|cs|rs))"
 
     files = re.findall(file_pattern, text)
+
+    # -------------------------------
+    # STACK TRACE DETECTION
+    # -------------------------------
 
     stack_pattern = r'File\s+"([^"]+)",\s+line\s+(\d+)'
 
@@ -195,6 +205,11 @@ def extract_signals_regex(description: str) -> dict:
 
     for f, _ in stack_matches:
         files.append(f)
+
+    # -------------------------------
+    # LINE NUMBER DETECTION
+    # -------------------------------
+
     line_pattern = r"(?:line\s+(\d+)|L(\d+)|:(\d+))"
 
     line_matches = re.findall(line_pattern, text_lower)
@@ -205,9 +220,23 @@ def extract_signals_regex(description: str) -> dict:
         for num in group
         if num
     ]
+
+    # -------------------------------
+    # SERVICE / MODULE DETECTION
+    # -------------------------------
+
+    service_pattern = r"\b([A-Z][a-zA-Z0-9]+(?:Service|Controller|Manager|Repository|Worker))\b"
+
+    services = re.findall(service_pattern, text)
+
+    # -------------------------------
+    # KEYWORD DETECTION
+    # -------------------------------
+
     tech_keywords = [
         "react", "node", "express", "mongodb", "sql", "redis",
         "docker", "kubernetes", "aws", "gcp", "azure",
+        "flask", "django", "spring", "fastapi",
         "openai", "groq", "langchain", "transformers",
         "jwt", "oauth", "api", "database", "cache"
     ]
@@ -217,31 +246,47 @@ def extract_signals_regex(description: str) -> dict:
         if kw in text_lower
     ]
 
+    # -------------------------------
+    # CLEANUP
+    # -------------------------------
+
     functions = list(dict.fromkeys(functions))[:10]
     files = list(dict.fromkeys(files))[:10]
+    services = list(dict.fromkeys(services))[:10]
+
     line_numbers = sorted(set(line_numbers))
+
+    # -------------------------------
+    # RETURN STRUCTURED SIGNALS
+    # -------------------------------
 
     return {
         "error_types": detected_errors,
         "functions": functions,
+        "services": services,
         "file_paths": files,
         "line_numbers": line_numbers,
         "keywords": keywords,
         "root_cause_guess": ""
     }
 
-def extract_signals(description: str, repo_files: list = None) -> dict:
+
+def extract_signals(description: str, repo_files: list = None, **incident_data) -> dict:
     """
     AI-first extraction, fallback to regex.
-    Supports repo file validation.
     """
 
-    ai_result = extract_signals_with_groq(description)
-    print("ai result ", ai_result)
+    context = {
+        "description": description,
+        **incident_data
+    }
+
+    ai_result = extract_signals_with_groq(context)
+
+    print("AI result:", ai_result)
 
     if ai_result and "keywords" in ai_result:
 
-        # Validate file paths against repo if provided
         if repo_files:
             ai_files = ai_result.get("file_paths", [])
             ai_result["file_paths"] = [
@@ -251,7 +296,6 @@ def extract_signals(description: str, repo_files: list = None) -> dict:
         return ai_result
 
     return extract_signals_regex(description)
-
 
 def extract_semantic_keywords(text: str) -> list:
     stop_words = {

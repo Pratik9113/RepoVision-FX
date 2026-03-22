@@ -87,7 +87,8 @@ class GitHubPRCreator:
             )
             
             if status.stdout.strip():
-                commit_msg = f"🤖 Autonomous RepoVision-FX \n\nRoot Cause: {root_cause_analysis.get('root_cause', 'Unknown')}"
+                env_msg = f"\n\nEnvironment Update:\n{root_cause_analysis.get('env_fix')}" if root_cause_analysis.get('env_fix') else ""
+                commit_msg = f"🤖 Auto-fix: {root_cause_analysis.get('root_cause', 'Incident')}{env_msg}"
                 subprocess.run(
                     ["git", "commit", "-m", commit_msg],
                     cwd=sandbox_path, check=True
@@ -125,19 +126,13 @@ class GitHubPRCreator:
             pr_title = f"🤖 Auto-fix: {root_cause_analysis.get('root_cause', 'Incident')[:50]}"
             pr_body = self._build_pr_body(root_cause_analysis)
             
-            # Check if PR already exists
-            existing_prs = self.repo.get_pulls(state='open', head=branch_name)
-            if existing_prs.totalCount > 0:
-                pr = existing_prs[0]
-                print(f"✅ PR already exists: {pr.html_url}")
-            else:
-                pr = self.repo.create_pull(
-                    title=pr_title,
-                    body=pr_body,
-                    head=branch_name,
-                    base=base_branch
-                )
-                print(f"✅ PR created: {pr.html_url}")
+            pr = self.repo.create_pull(
+                title=pr_title,
+                body=pr_body,
+                head=branch_name,
+                base=base_branch
+            )
+            print(f"✅ PR created: {pr.html_url}")
 
             return {
                 "pr_url": pr.html_url,
@@ -155,11 +150,15 @@ class GitHubPRCreator:
 
     def _build_pr_body(self, analysis):
         """Build PR description with markdown"""
+        env_section = ""
+        if analysis.get('env_fix'):
+            env_section = f"\n### ⚙️ Environment Update\n**Action Required:** {analysis.get('env_fix')}\n"
+
         return f"""## 🤖 Autonomous Incident Resolution
 
 ### 🐛 Root Cause
 **{analysis.get('root_cause', 'Not specified')}**
-
+{env_section}
 ### 🔧 Changes Applied
 {analysis.get('summary', 'See commit diff for details')}
 

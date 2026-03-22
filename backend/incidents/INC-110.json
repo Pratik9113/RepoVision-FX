@@ -1,0 +1,20 @@
+{
+  "id": "INC-110",
+  "title": "Uncaught Exception in Payment Notification Handler",
+  "severity": "P0 - Critical",
+  "service": "node-service",
+  "reported_by": "Stripe Webhook",
+  "environment": "production",
+  "timestamp": "2026-03-15T22:30:00Z",
+  "description": "Payments are being processed but notifications are failing because the Stripe webhook handler is crashing on certain metadata formats.",
+  "steps_to_reproduce": [
+    "Trigger test payment with custom metadata",
+    "Webhook endpoint receives event",
+    "Process crashes with Uncaught Exception"
+  ],
+  "error_log": "ReferenceError: metadata is not defined in stripeservice.js line 89",
+  "expected_behavior": "Webhook should be handled gracefully",
+  "actual_behavior": "Server crashes on webhook receipt",
+  "recent_changes": "Optimized metadata parsing code",
+  "tags": ["stripe", "webhook", "critical-bug"]
+}

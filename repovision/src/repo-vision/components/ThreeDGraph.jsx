@@ -21,17 +21,17 @@ export const ThreeDGraphViewer = ({ data }) => {
 
         // Scene setup
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0a0e27);
+        scene.background = new THREE.Color(0x06060c);
         sceneRef.current = scene;
 
-        const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 3000);
-        camera.position.set(0, 0, 320);
+        const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 4000);
+        camera.position.set(0, 0, 400);
         camera.lookAt(0, 0, 0);
         cameraRef.current = camera;
 
         const renderer = new THREE.WebGLRenderer({
             antialias: true,
-            alpha: false,
+            alpha: true,
             powerPreference: 'high-performance',
         });
         renderer.setSize(width, height);
@@ -47,70 +47,51 @@ export const ThreeDGraphViewer = ({ data }) => {
             canvas.height = 2048;
             const ctx = canvas.getContext('2d');
 
-            // Ocean
-            ctx.fillStyle = '#0d1b2a';
+            // Deep Space Background
+            ctx.fillStyle = '#06060c';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Add stars
-            ctx.fillStyle = '#ffffff';
-            for (let i = 0; i < 1000; i++) {
-                const x = Math.random() * canvas.width;
-                const y = Math.random() * canvas.height;
-                const size = Math.random() * 1.5;
-                ctx.fillRect(x, y, size, size);
+            // Add faint grid
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.05)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 36; i++) {
+                ctx.beginPath();
+                ctx.moveTo((i / 36) * canvas.width, 0);
+                ctx.lineTo((i / 36) * canvas.width, canvas.height);
+                ctx.stroke();
+            }
+            for (let i = 0; i <= 18; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, (i / 18) * canvas.height);
+                ctx.lineTo(canvas.width, (i / 18) * canvas.height);
+                ctx.stroke();
             }
 
-            // Continents with better detail
-            ctx.fillStyle = '#1a4d3e';
+            // Continents (Low-poly stylized)
+            ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
             const continents = [
-                // North America
-                { x: 0.15, y: 0.15, w: 0.15, h: 0.25 },
-                // South America
-                { x: 0.2, y: 0.5, w: 0.08, h: 0.2 },
-                // Europe
-                { x: 0.4, y: 0.1, w: 0.1, h: 0.15 },
-                // Africa
-                { x: 0.4, y: 0.3, w: 0.12, h: 0.28 },
-                // Asia
-                { x: 0.55, y: 0.15, w: 0.28, h: 0.3 },
-                // Australia
-                { x: 0.75, y: 0.55, w: 0.08, h: 0.12 },
+                { x: 0.15, y: 0.15, w: 0.15, h: 0.25 }, // NA
+                { x: 0.2, y: 0.5, w: 0.08, h: 0.2 },   // SA
+                { x: 0.45, y: 0.1, w: 0.1, h: 0.15 },  // EU
+                { x: 0.45, y: 0.3, w: 0.12, h: 0.28 }, // AF
+                { x: 0.6, y: 0.15, w: 0.25, h: 0.3 },  // AS
+                { x: 0.78, y: 0.6, w: 0.08, h: 0.12 }, // AU
             ];
 
             continents.forEach(cont => {
-                ctx.fillRect(
-                    cont.x * canvas.width,
-                    cont.y * canvas.height,
-                    cont.w * canvas.width,
-                    cont.h * canvas.height
-                );
+                ctx.shadowBlur = 40;
+                ctx.shadowColor = 'rgba(56, 189, 248, 0.3)';
+                ctx.fillRect(cont.x * canvas.width, cont.y * canvas.height, cont.w * canvas.width, cont.h * canvas.height);
             });
 
-            // Grid lines
-            ctx.strokeStyle = 'rgba(100, 150, 180, 0.2)';
-            ctx.lineWidth = 1;
-
-            for (let i = 0; i <= 24; i++) {
-                ctx.beginPath();
-                ctx.moveTo((i / 24) * canvas.width, 0);
-                ctx.lineTo((i / 24) * canvas.width, canvas.height);
-                ctx.stroke();
-            }
-
-            for (let i = 0; i <= 12; i++) {
-                ctx.beginPath();
-                ctx.moveTo(0, (i / 12) * canvas.height);
-                ctx.lineTo(canvas.width, (i / 12) * canvas.height);
-                ctx.stroke();
-            }
-
             const texture = new THREE.CanvasTexture(canvas);
-            texture.magFilter = THREE.LinearFilter;
-            const geometry = new THREE.SphereGeometry(150, 128, 64);
+            const geometry = new THREE.SphereGeometry(140, 64, 64);
             const material = new THREE.MeshPhongMaterial({
                 map: texture,
-                emissive: 0x0a1a2e,
-                emissiveIntensity: 0.4,
+                transparent: true,
+                opacity: 0.8,
+                emissive: 0x0e7490,
+                emissiveIntensity: 0.1
             });
 
             return new THREE.Mesh(geometry, material);
@@ -121,436 +102,267 @@ export const ThreeDGraphViewer = ({ data }) => {
         globeGroup.add(globe);
         scene.add(globeGroup);
 
-        // Create two main groups for side-by-side view
+        // Core Glowing Center
+        const glowCore = new THREE.Mesh(
+            new THREE.SphereGeometry(138, 32, 32),
+            new THREE.MeshBasicMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.05, wireframe: true })
+        );
+        globeGroup.add(glowCore);
+
+        // Sub-Groups for Layers
         const frontendGroup = new THREE.Group();
         const backendGroup = new THREE.Group();
-
         frontendGroup.position.x = 280;
         backendGroup.position.x = -280;
-
         globeGroup.add(frontendGroup);
         globeGroup.add(backendGroup);
 
-        const createDecoratedGlobe = (color, title) => {
+        const createLayerLabel = (color, title) => {
             const g = new THREE.Group();
-
-            // Core Sphere
-            const sphere = new THREE.Mesh(
-                new THREE.SphereGeometry(140, 64, 32),
-                new THREE.MeshPhongMaterial({
-                    color: 0x0a1a2e,
-                    emissive: color,
-                    emissiveIntensity: 0.2,
-                    transparent: true,
-                    opacity: 0.8,
-                    wireframe: true
-                })
-            );
-            g.add(sphere);
-
-            // Title Label
             const canvas = document.createElement('canvas');
             canvas.width = 512;
-            canvas.height = 128;
+            canvas.height = 160;
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
-            ctx.roundRect(0, 0, 512, 128, 20);
+            
+            ctx.fillStyle = 'rgba(14, 14, 26, 0.9)';
+            ctx.roundRect(0, 0, 512, 160, 24);
             ctx.fill();
-            ctx.font = 'bold 70px "Segoe UI"';
+            
+            const hexColor = `#${color.toString(16).padStart(6, '0')}`;
+            ctx.strokeStyle = hexColor;
+            ctx.lineWidth = 12;
+            ctx.stroke();
+
+            ctx.font = 'black 80px "Inter", sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
-            ctx.fillText(title, 256, 85);
+            ctx.fillStyle = hexColor;
+            ctx.fillText(title, 256, 105);
 
             const texture = new THREE.CanvasTexture(canvas);
-            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(120, 30), new THREE.MeshBasicMaterial({ map: texture, transparent: true }));
+            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(100, 32), new THREE.MeshBasicMaterial({ map: texture, transparent: true }));
             mesh.position.set(0, 180, 0);
             g.add(mesh);
-
             g.isGlobeTrigger = true;
             g.layerType = title.toLowerCase();
-
             return g;
         };
 
-        const frontendGlobe = createDecoratedGlobe(0xec4899, 'FRONTEND');
-        const backendGlobe = createDecoratedGlobe(0x10b981, 'BACKEND');
-
+        const frontendGlobe = createLayerLabel(0x0ea5e9, 'FRONTEND');
+        const backendGlobe = createLayerLabel(0x8b5cf6, 'BACKEND');
         frontendGroup.add(frontendGlobe);
         backendGroup.add(backendGlobe);
 
-        // Get all nodes and distribute on globe
         const nodes = data.graph.nodes;
         const links = data.graph.links;
-
         const nodesMap = new Map();
         const nodesLabels = new Map();
         const arrowsToAnimate = [];
 
-        // Help determine file color based on type
         const getFileColor = (node) => {
+            if (node.layer === 'frontend') return 0x0ea5e9;
             const name = node.name.toLowerCase();
-            const id = node.id.toLowerCase();
-
-            if (node.layer === 'frontend') return 0xec4899; // Pink
-            if (name.includes('middleware') || id.includes('middleware')) return 0x06b6d4; // Cyan for Middlewares
-            if (name.includes('controller') || id.includes('controller')) return 0x3b82f6; // Blue
-            if (name.includes('model') || id.includes('model') || name.includes('schema')) return 0x10b981; // Green
-            if (name.includes('route') || id.includes('route')) return 0xf97316; // Orange
-            if (name.includes('service') || id.includes('service')) return 0xa855f7; // Purple
-            if (name.includes('util') || name.includes('helper')) return 0xeab308; // Yellow
-
-            return node.layer === 'backend' ? 0x64748b : 0xec4899; // Default backend slate, frontend pink
+            if (name.includes('router') || name.includes('api')) return 0x6366f1; // Indigo
+            if (name.includes('service')) return 0x8b5cf6; // Purple
+            if (name.includes('model') || name.includes('db')) return 0x22c55e; // Green
+            return 0x8b5cf6; 
         };
 
-        // Distribute nodes evenly on two separate globes
-        const frontendNodes = nodes.filter(n => n.layer === 'frontend');
-        const backendNodes = nodes.filter(n => n.layer !== 'frontend');
-
-        const placeNodesOnGlobe = (layerNodes, group) => {
+        const placeNodes = (layerNodes, group) => {
             const total = layerNodes.length;
             layerNodes.forEach((node, index) => {
                 const color = getFileColor(node);
-
                 const phi = Math.acos(-1 + (2 * index) / Math.max(total, 1));
                 const theta = Math.sqrt(Math.PI * total) * phi;
-                const radius = 142;
+                const radius = 145;
 
                 const x = radius * Math.cos(theta) * Math.sin(phi);
                 const y = radius * Math.sin(theta) * Math.sin(phi);
                 const z = radius * Math.cos(phi);
-
                 nodesMap.set(node.id, { ...node, x, y, z });
 
+                // Node Point
                 const pin = new THREE.Mesh(
-                    new THREE.SphereGeometry(2.8, 16, 16),
-                    new THREE.MeshPhongMaterial({ color, emissive: color, emissiveIntensity: 1.0 })
+                    new THREE.SphereGeometry(2.5, 12, 12),
+                    new THREE.MeshStandardMaterial({ 
+                        color, 
+                        emissive: color, 
+                        emissiveIntensity: 2,
+                        roughness: 0,
+                        metalness: 1
+                    })
                 );
                 pin.position.set(x, y, z);
                 group.add(pin);
 
-                // 2. Create glassmorphism label
+                // Label
                 const labelCanvas = document.createElement('canvas');
-                labelCanvas.width = 512;
-                labelCanvas.height = 100;
+                labelCanvas.width = 400; labelCanvas.height = 80;
                 const ctx = labelCanvas.getContext('2d');
-
-                // Background
-                ctx.fillStyle = 'rgba(10, 14, 39, 0.85)';
-                ctx.roundRect(0, 0, labelCanvas.width, labelCanvas.height, 15);
+                ctx.fillStyle = 'rgba(6, 6, 12, 0.8)';
+                ctx.roundRect(0, 0, 400, 80, 12);
                 ctx.fill();
-
-                // Border with file-type color
-                const hexColor = `#${color.toString(16).padStart(6, '0')}`;
-                ctx.strokeStyle = hexColor;
-                ctx.lineWidth = 6;
-                ctx.stroke();
-
                 ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 34px "Segoe UI", Roboto, sans-serif';
+                ctx.font = 'bold 32px "Inter", sans-serif';
                 ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-
-                const displayName = node.name.length > 30 ? node.name.substring(0, 27) + '...' : node.name;
-                ctx.fillText(displayName, labelCanvas.width / 2, labelCanvas.height / 2);
+                ctx.fillText(node.name.length > 20 ? node.name.substring(0, 17) + '...' : node.name, 200, 50);
 
                 const labelTexture = new THREE.CanvasTexture(labelCanvas);
-                const labelMaterial = new THREE.MeshBasicMaterial({
-                    map: labelTexture,
-                    transparent: true,
-                    side: THREE.DoubleSide
-                });
-
-                const labelWidth = 28 + (node.val || 1) * 1.5;
-                const labelHeight = labelWidth * (labelCanvas.height / labelCanvas.width);
-                const labelGeometry = new THREE.PlaneGeometry(labelWidth, labelHeight);
-                const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
-
-                // Position label slightly further out than the pin
-                const labelPos = new THREE.Vector3(x, y, z).normalize().multiplyScalar(155);
+                const labelMesh = new THREE.Mesh(
+                    new THREE.PlaneGeometry(35, 7), 
+                    new THREE.MeshBasicMaterial({ map: labelTexture, transparent: true, side: THREE.DoubleSide })
+                );
+                const labelPos = new THREE.Vector3(x, y, z).normalize().multiplyScalar(158);
                 labelMesh.position.copy(labelPos);
                 group.add(labelMesh);
                 nodesLabels.set(node.id, labelMesh);
             });
         };
 
-        placeNodesOnGlobe(frontendNodes, frontendGroup);
-        placeNodesOnGlobe(backendNodes, backendGroup);
+        placeNodes(nodes.filter(n => n.layer === 'frontend'), frontendGroup);
+        placeNodes(nodes.filter(n => n.layer !== 'frontend'), backendGroup);
 
-        // Draw connection flows (within their respective globes)
         links.forEach((link) => {
-            const source = nodesMap.get(link.source);
-            const target = nodesMap.get(link.target);
-
-            // Draw connection flows
-            if (source && target && source.layer === target.layer) {
-                const group = source.layer === 'frontend' ? frontendGroup : backendGroup;
-                const sourceVec = new THREE.Vector3(source.x, source.y, source.z);
-                const targetVec = new THREE.Vector3(target.x, target.y, target.z);
-                const color = getFileColor(source);
-
-                const dist = sourceVec.distanceTo(targetVec);
-                const arcHeight = 140 + dist * 0.4;
-
-                const midVec = new THREE.Vector3()
-                    .addVectors(sourceVec, targetVec)
-                    .multiplyScalar(0.5)
-                    .normalize()
-                    .multiplyScalar(arcHeight);
+            const s = nodesMap.get(link.source);
+            const t = nodesMap.get(link.target);
+            if (s && t && s.layer === t.layer) {
+                const group = s.layer === 'frontend' ? frontendGroup : backendGroup;
+                const sV = new THREE.Vector3(s.x, s.y, s.z);
+                const tV = new THREE.Vector3(t.x, t.y, t.z);
+                const color = getFileColor(s);
 
                 const curve = new THREE.CatmullRomCurve3([
-                    sourceVec,
-                    sourceVec.clone().normalize().multiplyScalar(145),
-                    midVec,
-                    targetVec.clone().normalize().multiplyScalar(145),
-                    targetVec,
+                    sV,
+                    sV.clone().normalize().multiplyScalar(150),
+                    new THREE.Vector3().addVectors(sV, tV).multiplyScalar(0.5).normalize().multiplyScalar(160),
+                    tV.clone().normalize().multiplyScalar(150),
+                    tV,
                 ]);
 
                 const line = new THREE.Line(
-                    new THREE.BufferGeometry().setFromPoints(curve.getPoints(50)),
-                    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.15 })
+                    new THREE.BufferGeometry().setFromPoints(curve.getPoints(30)),
+                    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.1 })
                 );
                 group.add(line);
 
                 const arrows = [];
-                for (let i = 0; i < 3; i++) {
-                    const arrowGroup = new THREE.Group();
-                    arrowGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1.2), new THREE.MeshBasicMaterial({ color })));
-                    const cone = new THREE.Mesh(new THREE.ConeGeometry(1.8, 5), new THREE.MeshPhongMaterial({ color, emissive: color }));
-                    cone.rotateX(Math.PI / 2);
-                    arrowGroup.add(cone);
-                    group.add(arrowGroup);
-                    arrows.push(arrowGroup);
+                for(let i=0; i<2; i++) {
+                    const a = new THREE.Mesh(new THREE.ConeGeometry(1.5, 4), new THREE.MeshBasicMaterial({ color }));
+                    a.rotateX(Math.PI/2);
+                    group.add(a);
+                    arrows.push(a);
                 }
                 arrowsToAnimate.push({ arrows, curve });
             }
         });
 
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-        scene.add(ambientLight);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        const pL = new THREE.PointLight(0x0ea5e9, 1.5);
+        pL.position.set(500, 500, 500);
+        scene.add(pL);
 
-        const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
-        mainLight.position.set(200, 500, 300);
-        scene.add(mainLight);
-
-        // Interaction values
-        let isDragging = false;
-        let previousMousePosition = { x: 0, y: 0 };
-        let MathRotation = { x: 0, y: 0 }; // changed from rotation to MathRotation to avoid conflicts if any
-        const zoomState = { current: 650, min: 300, max: 1200 };
-
-        const onMouseDown = (e) => {
-            isDragging = true;
-            previousMousePosition = { x: e.clientX, y: e.clientY };
-
-            // Raycaster for globe clicking
-            if (!containerRef.current || focus !== 'all') return;
-
+        let isDragging = false, prevM = { x: 0, y: 0 }, rot = { x: 0, y: 0 }, zoom = 700;
+        const onMD = (e) => {
+            isDragging = true; prevM = { x: e.clientX, y: e.clientY };
+            if (focus !== 'all') return;
             const rect = containerRef.current.getBoundingClientRect();
-            const mouse = new THREE.Vector2(
-                ((e.clientX - rect.left) / rect.width) * 2 - 1,
-                -((e.clientY - rect.top) / rect.height) * 2 + 1
-            );
-
-            const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(scene.children, true);
-
-            for (const intersect of intersects) {
-                let parent = intersect.object;
-                while (parent && !parent.isGlobeTrigger) parent = parent.parent;
-
-                if (parent?.layerType) {
-                    setFocus(parent.layerType);
-                    break;
-                }
+            const mouse = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+            const ray = new THREE.Raycaster(); ray.setFromCamera(mouse, camera);
+            const ih = ray.intersectObjects(scene.children, true);
+            for (const h of ih) {
+                let p = h.object; while (p && !p.isGlobeTrigger) p = p.parent;
+                if (p?.layerType) { setFocus(p.layerType); break; }
             }
         };
-
-        const onMouseMove = (e) => {
+        const onMM = (e) => {
             if (!isDragging) return;
-            const deltaX = e.clientX - previousMousePosition.x;
-            const deltaY = e.clientY - previousMousePosition.y;
-            MathRotation.y += deltaX * 0.005;
-            MathRotation.x += deltaY * 0.005;
-            previousMousePosition = { x: e.clientX, y: e.clientY };
+            rot.y += (e.clientX - prevM.x) * 0.005;
+            rot.x += (e.clientY - prevM.y) * 0.005;
+            prevM = { x: e.clientX, y: e.clientY };
         };
+        const onW = (e) => { e.preventDefault(); zoom = Math.max(300, Math.min(1500, zoom + (e.deltaY > 0 ? 30 : -30))); };
+        
+        renderer.domElement.addEventListener('mousedown', onMD);
+        window.addEventListener('mousemove', onMM);
+        window.addEventListener('mouseup', () => isDragging = false);
+        renderer.domElement.addEventListener('wheel', onW, { passive: false });
 
-        const onMouseUp = () => isDragging = false;
-        const onMouseWheel = (e) => {
-            e.preventDefault();
-            zoomState.current = Math.max(zoomState.min, Math.min(zoomState.max, zoomState.current + (e.deltaY > 0 ? 25 : -25)));
-        };
-
-        renderer.domElement.addEventListener('mousedown', onMouseDown);
-        renderer.domElement.addEventListener('mousemove', onMouseMove);
-        renderer.domElement.addEventListener('mouseup', onMouseUp);
-        renderer.domElement.addEventListener('wheel', onMouseWheel, { passive: false });
-
-        const handleResize = () => {
-            if (!containerRef.current || !camera || !renderer) return;
-            const w = containerRef.current.clientWidth;
-            const h = containerRef.current.clientHeight;
-            camera.aspect = w / h;
-            camera.updateProjectionMatrix();
-            renderer.setSize(w, h);
-        };
-        window.addEventListener('resize', handleResize);
-
-        // Animation loop variables
-        let animationId;
-        let time = 0;
-
+        let aid, tCount = 0;
         const animate = () => {
-            animationId = requestAnimationFrame(animate);
-            time += 0.01;
+            aid = requestAnimationFrame(animate);
+            tCount += 0.01;
+            globeGroup.quaternion.setFromEuler(new THREE.Euler(rot.x, rot.y, 0));
+            globe.rotation.y += 0.001;
 
-            const groupRotation = new THREE.Quaternion();
-            groupRotation.setFromEuler(new THREE.Euler(MathRotation.x, MathRotation.y, 0));
-
-            // Rotate the entire system (including the planet background)
-            globeGroup.quaternion.copy(groupRotation);
-
-            // Add continuous rotation to the planet background
-            globe.rotation.y += 0.0005;
-
-            // Target values for transitions
-            const targetX = { frontend: -450, backend: 450, all: 280 };
-            const targetXBack = { frontend: 450, backend: -450, all: -280 };
-            const focusX = 0;
-
-            // Lerp positions and scales
             if (focus === 'frontend') {
-                frontendGroup.position.x += (focusX - frontendGroup.position.x) * 0.1;
-                backendGroup.position.x += (targetX.frontend - backendGroup.position.x) * 0.1;
-                backendGroup.scale.lerp(new THREE.Vector3(0.3, 0.3, 0.3), 0.1);
-                frontendGroup.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
+                frontendGroup.position.x += (0 - frontendGroup.position.x) * 0.1;
+                backendGroup.position.x += (-500 - backendGroup.position.x) * 0.1;
+                backendGroup.scale.lerp(new THREE.Vector3(0.2,0.2,0.2), 0.1);
             } else if (focus === 'backend') {
-                backendGroup.position.x += (focusX - backendGroup.position.x) * 0.1;
-                frontendGroup.position.x += (targetXBack.backend - frontendGroup.position.x) * 0.1;
-                frontendGroup.scale.lerp(new THREE.Vector3(0.3, 0.3, 0.3), 0.1);
-                backendGroup.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
+                backendGroup.position.x += (0 - backendGroup.position.x) * 0.1;
+                frontendGroup.position.x += (500 - frontendGroup.position.x) * 0.1;
+                frontendGroup.scale.lerp(new THREE.Vector3(0.2,0.2,0.2), 0.1);
             } else {
                 frontendGroup.position.x += (280 - frontendGroup.position.x) * 0.1;
                 backendGroup.position.x += (-280 - backendGroup.position.x) * 0.1;
-                frontendGroup.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
-                backendGroup.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
+                frontendGroup.scale.lerp(new THREE.Vector3(1,1,1), 0.1);
+                backendGroup.scale.lerp(new THREE.Vector3(1,1,1), 0.1);
             }
 
-            nodesLabels.forEach((mesh) => {
-                mesh.lookAt(camera.position);
-            });
-
-            // Animate dependency flows
+            nodesLabels.forEach(m => m.lookAt(camera.position));
             arrowsToAnimate.forEach(({ arrows, curve }) => {
-                arrows.forEach((arrow, i) => {
-                    const t = (time * 0.4 + (i / arrows.length)) % 1;
-                    const pos = curve.getPoint(t);
-                    arrow.position.copy(pos);
-                    arrow.lookAt(curve.getPoint(Math.min(1, t + 0.01)));
+                arrows.forEach((a, i) => {
+                    const t = (tCount * 0.5 + (i / arrows.length)) % 1;
+                    a.position.copy(curve.getPoint(t));
+                    a.lookAt(curve.getPoint(Math.min(1, t + 0.01)));
                 });
             });
 
-            camera.position.z = zoomState.current;
+            camera.position.z = zoom;
             renderer.render(scene, camera);
         };
-
         animate();
 
         return () => {
-            cancelAnimationFrame(animationId);
-            renderer.domElement.removeEventListener('mousedown', onMouseDown);
-            renderer.domElement.removeEventListener('mousemove', onMouseMove);
-            renderer.domElement.removeEventListener('mouseup', onMouseUp);
-            renderer.domElement.removeEventListener('wheel', onMouseWheel);
-            window.removeEventListener('resize', handleResize);
+            cancelAnimationFrame(aid);
             renderer.dispose();
-            if (containerRef.current?.firstChild === renderer.domElement) {
-                containerRef.current.removeChild(renderer.domElement);
-            }
+            if (containerRef.current) containerRef.current.innerHTML = '';
         };
     }, [data, focus]);
 
     return (
-        <div className="w-full flex flex-col gap-6 relative">
-            <div
-                ref={containerRef}
-                className="w-full rounded-xl border border-white/10 overflow-hidden bg-[#050816] cursor-pointer"
-                style={{ height: '750px', minHeight: '750px', boxShadow: '0 0 50px rgba(0,0,0,0.5)' }}
-            />
+        <div className="w-full flex flex-col gap-6 relative flex-grow overflow-hidden">
+            <div ref={containerRef} className="w-full flex-grow rounded-2xl bg-black/20 cursor-grab active:cursor-grabbing border border-white/[0.05]" />
 
             {focus !== 'all' && (
                 <button
                     onClick={() => setFocus('all')}
-                    className="absolute top-6 left-6 z-10 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-4 py-2 rounded-lg border border-white/20 transition-all flex items-center gap-2"
+                    className="absolute top-6 left-6 z-10 bg-sky-600 hover:bg-sky-500 text-white px-5 py-2.5 rounded-xl border-none shadow-lg shadow-sky-600/20 transition-all font-bold text-xs uppercase tracking-widest cursor-pointer"
                 >
-                    <span>←</span> Back to Overview
+                    ← Back to Topology
                 </button>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div className="bg-slate-900/50 rounded-lg p-5 border border-white/10 backdrop-blur-md">
-                    <h3 className="font-bold text-slate-100 mb-4 flex items-center gap-2">
-                        <span className="w-2 h-4 bg-pink-500 rounded-full"></span>
-                        File Type Legend
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div className="flex items-center gap-2 text-slate-300">
-                            <div className="w-3 h-3 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.5)]"></div>
-                            <span>Middlewares</span>
+            <div className="absolute bottom-6 right-6 grid grid-cols-1 gap-4 max-w-[300px] pointer-events-none">
+                <div className="bg-[#0e0e1a]/80 backdrop-blur-xl rounded-2xl p-5 border border-white/10 shadow-2xl pointer-events-auto">
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30 mb-4">Topology Key</h3>
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                            <div className="w-2.5 h-2.5 rounded-full bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.5)]" />
+                            <span className="text-[11px] font-bold text-white/50 uppercase tracking-wider">Frontend Nodes</span>
                         </div>
-                        <div className="flex items-center gap-2 text-slate-300">
-                            <div className="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
-                            <span>Controllers</span>
+                        <div className="flex items-center gap-3">
+                            <div className="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]" />
+                            <span className="text-[11px] font-bold text-white/50 uppercase tracking-wider">Service Logic</span>
                         </div>
-                        <div className="flex items-center gap-2 text-slate-300">
-                            <div className="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-                            <span>Models/Schemas</span>
+                        <div className="flex items-center gap-3">
+                            <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]" />
+                            <span className="text-[11px] font-bold text-white/50 uppercase tracking-wider">Routing / API</span>
                         </div>
-                        <div className="flex items-center gap-2 text-slate-300">
-                            <div className="w-3 h-3 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]"></div>
-                            <span>Routes</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-slate-300">
-                            <div className="w-3 h-3 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]"></div>
-                            <span>Services</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-slate-300">
-                            <div className="w-3 h-3 rounded-full bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.5)]"></div>
-                            <span>Frontend</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-slate-300">
-                            <div className="w-3 h-3 rounded-full bg-slate-500 shadow-[0_0_8px_rgba(100,116,139,0.5)]"></div>
-                            <span>Core/Others</span>
+                        <div className="flex items-center gap-3">
+                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                            <span className="text-[11px] font-bold text-white/50 uppercase tracking-wider">Data Models</span>
                         </div>
                     </div>
-                </div>
-
-                <div className="bg-slate-900/50 rounded-lg p-5 border border-white/10 backdrop-blur-md">
-                    <h3 className="font-bold text-slate-100 mb-4">Architecture Layers</h3>
-                    <div className="space-y-3 text-sm">
-                        <div className="flex justify-between items-center text-slate-400">
-                            <span>Top Hemisphere</span>
-                            <span className="text-green-400 font-mono text-xs">BACKEND</span>
-                        </div>
-                        <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden">
-                            <div className="bg-gradient-to-r from-green-500 to-pink-500 h-full w-full opacity-50"></div>
-                        </div>
-                        <div className="flex justify-between items-center text-slate-400">
-                            <span>Bottom Hemisphere</span>
-                            <span className="text-pink-400 font-mono text-xs">FRONTEND</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-slate-900/50 rounded-lg p-5 border border-white/10 backdrop-blur-md col-span-1 md:col-span-2 lg:col-span-1">
-                    <h3 className="font-bold text-slate-100 mb-4">Navigation Guide</h3>
-                    <ul className="text-xs text-slate-400 space-y-2">
-                        <li className="flex items-center gap-2">🖱️ <strong>Drag:</strong> Spin the galaxy</li>
-                        <li className="flex items-center gap-2">🔍 <strong>Scroll:</strong> Zoom into code clusters</li>
-                        <li className="flex items-center gap-2">📍 <strong>Pins:</strong> Precise file locations</li>
-                        <li className="flex items-center gap-2">🏹 <strong>Flows:</strong> Live dependency movements</li>
-                    </ul>
                 </div>
             </div>
         </div>

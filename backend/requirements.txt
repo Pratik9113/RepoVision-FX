@@ -11,3 +11,9 @@ chromadb
 sentence-transformers
 tree-sitter
 networkx
+python-jose[cryptography]  
+email-validator
+motor
+passlib
+python-multipart
+bcrypt

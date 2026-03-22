@@ -1,0 +1,20 @@
+{
+  "id": "INC-109",
+  "title": "Node.js Memory Leak in WebSocket Gateway",
+  "severity": "P1 - High",
+  "service": "node-service",
+  "reported_by": "Ops Bot",
+  "environment": "production",
+  "timestamp": "2026-03-15T20:45:00Z",
+  "description": "The WebSocket gateway service is consuming memory linearly. Garbage collection is unable to reclaim memory, leading to an eventual OOM crash every 6 hours.",
+  "steps_to_reproduce": [
+    "Connect 1000 persistent WS clients",
+    "Monitor heap usage via Prometheus",
+    "Observe heap growth without plateau"
+  ],
+  "error_log": "FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory",
+  "expected_behavior": "Memory usage should stabilize",
+  "actual_behavior": "Service crashes due to memory leak",
+  "recent_changes": "Added tracking for connected clients using a Map without proper cleanup",
+  "tags": ["memory-leak", "node-js", "websocket"]
+}

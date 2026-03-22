@@ -1,0 +1,20 @@
+{
+  "id": "INC-010",
+  "title": "Redis cache inconsistency in user preferences",
+  "severity": "P2 - Medium",
+  "service": "python-service",
+  "reported_by": "UI Team",
+  "environment": "staging",
+  "timestamp": "2026-03-15T21:30:00Z",
+  "description": "User preferences are not updating correctly on the dashboard. It appears the Redis cache is not being invalidated correctly after a database update.",
+  "steps_to_reproduce": [
+    "Update user theme in dashboard",
+    "Refresh page",
+    "Observe theme reverting to old value"
+  ],
+  "error_log": "DEBUG: Cache hit for user:123 - status remains 'light'",
+  "expected_behavior": "Cache should be updated or invalidated on write",
+  "actual_behavior": "Cache persists with stale data",
+  "recent_changes": "Refactored cache invalidation logic",
+  "tags": ["redis", "cache", "ui-glitch"]
+}
