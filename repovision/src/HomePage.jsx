@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 const NAV_LINKS = ["Dashboard", "3D Architecture", "Agentic Fixes", "Incidents", "Docs"];
 
 const STATS = [
-  { label: "Files Indexed",    value: "1.2k", color: "text-blue-400",   badge: "● Live",       badgeCls: "bg-blue-500/10 text-blue-400 border border-blue-500/20"  },
-  { label: "Active Agents",    value: "12",   color: "text-purple-400", badge: "Running",     badgeCls: "bg-purple-500/10 text-purple-400 border border-purple-500/20" },
-  { label: "Avg Fix Time",     value: "3m",   color: "text-cyan-400",   badge: "avg this week", badgeCls: "bg-cyan-400/10 text-cyan-300 border border-cyan-400/20" },
-  { label: "Auto-Resolved",    value: "89%",  color: "text-green-400",  badge: "↑ +12%",       badgeCls: "bg-green-500/10 text-green-400 border border-green-500/20"  },
+  { label: "Files Indexed",    value: "-",   color: "text-blue-400",   badge: "● Ready",       badgeCls: "bg-blue-500/10 text-blue-400 border border-blue-500/20"  },
+  { label: "Active Agents",    value: "0",   color: "text-purple-400", badge: "Idle",     badgeCls: "bg-purple-500/10 text-purple-400 border border-purple-500/20" },
+  { label: "Avg Fix Time",     value: "-",   color: "text-cyan-400",   badge: "N/A", badgeCls: "bg-cyan-400/10 text-cyan-300 border border-cyan-400/20" },
+  { label: "Auto-Resolved",    value: "0%",  color: "text-green-400",  badge: "-",       badgeCls: "bg-green-500/10 text-green-400 border border-green-500/20"  },
 ];
 
 const INCIDENTS = [
@@ -327,7 +327,7 @@ export default function HomePage() {
                 <span key={i} className={`w-8 h-8 rounded-full border-2 border-[#06060c] flex items-center justify-center text-[11px] font-bold text-white bg-gradient-to-br ${grad} ${i > 0 ? "-ml-2" : ""}`}>{init}</span>
               ))}
             </div>
-            <p className="text-[13px] text-white/25">Trusted by <strong className="text-white/45 font-semibold">2,000+ engineering teams</strong> worldwide</p>
+            <p className="text-[13px] text-white/25">Trusted by <strong className="text-white/45 font-semibold">Engineering Teams</strong></p>
           </div>
 
           {/* ── Dashboard mockup ── */}
