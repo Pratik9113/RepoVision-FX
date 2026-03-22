@@ -1,4 +1,5 @@
 import { Badge } from './Badge';
+import { Search, Zap } from 'lucide-react';
 
 const InputSection = ({
     repoUrl,
@@ -9,50 +10,54 @@ const InputSection = ({
     onTryDemo,
 }) => {
     return (
-        <section className="relative bg-gradient-to-br from-slate-900/70 via-slate-900/50 to-slate-950/70 backdrop-blur-xl border border-purple-500/20 rounded-3xl p-8 shadow-2xl shadow-purple-900/20 mb-8 overflow-hidden">
-            {/* Card gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-900/10 via-transparent to-pink-900/10 pointer-events-none"></div>
-
+        <section className="relative">
             <div className="relative z-10">
-                <h2 className="text-2xl md:text-3xl font-bold mb-4 text-white">
-                    Analyze a Repository
-                </h2>
                 <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center">
-                    <input
-                        type="text"
-                        value={repoUrl}
-                        onChange={(e) => setRepoUrl(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && !isLoading && onAnalyze()}
-                        placeholder="https://github.com/OWNER/REPO or .../tree/BRANCH"
-                        className="w-full md:flex-1 rounded-xl bg-slate-950/80 border border-slate-700/50 px-5 py-3.5 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all duration-300 text-slate-100 shadow-inner"
-                        disabled={isLoading}
-                    />
+                    <div className="relative flex-grow group">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-sky-400 transition-colors" />
+                        <input
+                            type="text"
+                            value={repoUrl}
+                            onChange={(e) => setRepoUrl(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && !isLoading && onAnalyze()}
+                            placeholder="https://github.com/OWNER/REPO"
+                            className="w-full pl-12 pr-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500/40 transition-all duration-300"
+                            disabled={isLoading}
+                        />
+                    </div>
                     <div className="flex gap-3">
                         <button
-                            className="flex-1 md:w-auto rounded-xl px-8 py-3.5 bg-gradient-to-r from-purple-600 via-purple-500 to-pink-500 hover:from-purple-500 hover:via-purple-400 hover:to-pink-400 disabled:opacity-60 text-white font-semibold shadow-lg shadow-purple-500/30 transition-all duration-300 transform hover:scale-105 hover:shadow-purple-500/50 whitespace-nowrap"
+                            className="flex-1 md:w-auto rounded-xl px-10 py-4 bg-sky-600 hover:bg-sky-500 disabled:opacity-60 text-white font-bold shadow-lg shadow-sky-500/20 transition-all duration-300 active:scale-95 whitespace-nowrap border-none cursor-pointer flex items-center justify-center gap-2"
                             disabled={isLoading}
                             onClick={onAnalyze}
                         >
-                            {isLoading ? "Analyzing..." : "Analyze"}
+                            {isLoading ? (
+                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            ) : (
+                                <Zap className="w-4 h-4 fill-white" />
+                            )}
+                            {isLoading ? "Analyzing..." : "Analyze Repo"}
                         </button>
                         <button
-                            className="flex-1 md:w-auto rounded-xl px-8 py-3.5 bg-slate-800/60 hover:bg-slate-700/60 text-slate-100 border border-slate-600/50 hover:border-slate-500/50 transition-all duration-300 font-medium backdrop-blur-sm whitespace-nowrap"
+                            className="flex-1 md:w-auto rounded-xl px-10 py-4 bg-white/5 hover:bg-white/10 text-white/70 border border-white/10 transition-all duration-300 font-bold whitespace-nowrap cursor-pointer border-none"
                             disabled={isLoading}
                             onClick={onTryDemo}
                         >
-                            Try Demo
+                            Test Demo
                         </button>
                     </div>
                 </div>
-                <div className="mt-6 flex flex-wrap gap-2.5">
-                    <Badge>Example: https://github.com/vercel/next.js</Badge>
-                    <Badge variant="primary">Supports all public repositories</Badge>
-                    <Badge variant="success">AI-powered analysis</Badge>
+                
+                <div className="mt-8 flex flex-wrap gap-3">
+                    <Badge variant="blue">Supports GitHub HTTPS/SSH</Badge>
+                    <Badge variant="sky">Deep Neural indexing</Badge>
+                    <Badge variant="indigo">3D Topology Mapping</Badge>
                 </div>
 
                 {error && (
-                    <div className="mt-6 p-4 rounded-xl bg-red-950/50 border border-red-500/30 text-red-300 backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300">
-                        <strong className="mr-1 font-semibold">Error:</strong> {error}
+                    <div className="mt-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold tracking-wide uppercase backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300 flex items-center gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
+                        {error}
                     </div>
                 )}
             </div>

@@ -186,9 +186,12 @@ def search_files(signals: Dict[str, Any], sandbox_path: str) -> List[Dict[str, A
     sandbox = Path(sandbox_path)
 
     keywords = signals.get("keywords", [])
-    error_patterns = signals.get("error_patterns", [])
+    error_patterns = signals.get("error_types", [])
     service_names = signals.get("services", [])
     function_names = signals.get("functions", [])
+    file_paths = signals.get("file_paths", [])
+    root_cause_guess = signals.get("root_cause_guess", "Unknown")
+    line_numbers = signals.get("line_numbers", [])
 
     IGNORE_DIRS = {
         "node_modules", ".git", "__pycache__", "venv",
@@ -227,7 +230,10 @@ def search_files(signals: Dict[str, Any], sandbox_path: str) -> List[Dict[str, A
                 keywords,
                 error_patterns,
                 service_names,
-                function_names
+                function_names,
+                file_paths,
+                root_cause_guess,
+                line_numbers
             )
 
             # 2️⃣ Structural scanning            
@@ -282,7 +288,7 @@ def is_relevant_file(filename: str) -> bool:
         '.py', '.js', '.ts', '.java', '.go', '.rb',
         '.php', '.cpp', '.c', '.h', '.cs',
         '.json', '.yaml', '.yml', '.toml', '.ini',
-        '.md', '.txt',
+        '.txt',
         '.html', '.css', '.jsx', '.tsx',
         '.sql', '.conf', '.env', '.sh', '.bash'
     }
@@ -304,7 +310,11 @@ def search_file_content(
     keywords: List[str],
     error_patterns: List[str],
     service_names: List[str],
-    function_names: List[str]
+    function_names: List[str],
+    file_paths: List[str],
+    root_cause_guess: str,
+    line_numbers: List[int],
+    description : str,
 ) -> Dict[str, Any]:
     """
     Search a single file's content for matches with smart scoring
@@ -317,13 +327,50 @@ def search_file_content(
         matches = []
         seen_lines = set()
 
-        file_lower = str(file_path).lower()
+        file_lower = str(file_path).replace('\\', '/').lower()
+
+        # EXTREMELY HIGH PRIORITY: Explicitly mentioned files
+        for fpath in file_paths:
+            if fpath and fpath.replace('\\', '/').lower() in file_lower:
+                score += 500
+
+        # DESCRIPTION-BASED SCORING - Extract and prioritize API routes from description
+        if description:
+            description_lower = description.lower()
+            
+            # Extract potential API routes from description
+            import re
+            # Look for patterns like /api/..., /v1/..., /users, etc.
+            api_routes = re.findall(r'(/[a-zA-Z0-9_\-/]+)', description_lower)
+            
+            for route in api_routes:
+                if route and len(route) > 1:  # Avoid single slash
+                    route_lower = route.lower()
+                    
+                    # Check if this route appears in the file path
+                    if route_lower in file_lower:
+                        score += 400  # Very high score for API route match
+                    
+                    # Check file content for this route (simple presence check)
+                    for i, line in enumerate(lines):
+                        line_lower = line.lower()
+                        if route_lower in line_lower:
+                            score += 25  # Simple score for route presence in file
+                            if i not in seen_lines:
+                                matches.append((i + 1, line.strip(), [f"API_ROUTE:{route}"]))
+                                seen_lines.add(i)
 
         # File name boosting (dynamic)
         important_terms = keywords + service_names + function_names
         for term in important_terms:
-            if term and term.lower() in file_lower:
-                score += 12
+            if term:
+                term_lower = term.replace('\\', '/').lower()
+                if term_lower in file_lower:
+                    # AI might misclassify a file path as a function or keyword
+                    if '/' in term_lower or term_lower.endswith('.py') or term_lower.endswith('.js'):
+                        score += 500
+                    else:
+                        score += 12
 
         # Line scanning
         for i, line in enumerate(lines):

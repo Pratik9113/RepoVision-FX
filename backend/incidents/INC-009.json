@@ -1,0 +1,20 @@
+{
+  "id": "INC-009",
+  "title": "Database connection pool exhausted under heavy load",
+  "severity": "P0 - Critical",
+  "service": "python-service",
+  "reported_by": "SRE Team",
+  "environment": "production",
+  "timestamp": "2026-03-15T22:00:00Z",
+  "description": "Production python-service is failing to respond to requests due to database connection pool exhaustion. Monitoring shows spikes in latency followed by 503 errors.",
+  "steps_to_reproduce": [
+    "Run load test with 500 concurrent users",
+    "Observe database connection count reaching max_connections",
+    "Service starts returning 503 errors"
+  ],
+  "error_log": "sqlalchemy.exc.TimeoutError: QueuePool limit of size 5 overflow 10 reached, connection timed out",
+  "expected_behavior": "Service should handle load gracefully and recycle connections",
+  "actual_behavior": "Service hangs and crashes under load",
+  "recent_changes": "Increased worker threads without adjusting DB pool size",
+  "tags": ["database", "performance", "outage"]
+}
